@@ -21,6 +21,22 @@
     border: 1px solid #1e293b;
     border-radius: 0.5rem;
   }
+  .tw-card {
+    background-color: #0f1318;
+    border: 1px solid #2a3344;
+    border-radius: 0.75rem;
+    padding: 0.75rem;
+  }
+  .tw-label {
+    font-size: 0.6875rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: #64748b;
+  }
+  .tw-mono {
+    font-family: 'JetBrains Mono', 'Fira Code', 'SF Mono', ui-monospace, monospace;
+  }
   .btn-primary {
     background-color: #2563eb;
     color: #fff;

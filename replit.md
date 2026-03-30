@@ -54,7 +54,7 @@ npm run build         # Vite production build
 ## Key Features
 
 - **Dashboard**: Weather conditions, 7-day forecast, active data sources
-- **Water Quality**: Real-time USGS NWIS + NOAA CO-OPS + NDBC data
+- **Water Quality**: Interactive Leaflet map with NASA GIBS satellite overlays (MODIS, VIIRS), DO₂-coded station markers, live USGS + CO-OPS + NDBC readings
 - **HAB Oracle**: Pre-bloom harmful algal bloom prediction (48-72h, World First™)
 - **Sensors**: Registry of all data feed integrations
 - **WetlandAI**: Wetland pre-delineation module (pending Vexcel integration)
