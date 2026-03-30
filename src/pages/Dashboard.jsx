@@ -1,143 +1,281 @@
-import { useState, useEffect } from 'react'
-import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts'
+import { useEffect } from 'react'
+import { useStore } from '../store/index.js'
+import { StatCard, PageHeader, RiskBadge, Spinner, Section, EmptyState, AlertBanner } from '../components/Common/index.jsx'
+import { HABProbabilityChart } from '../components/Charts/index.jsx'
+import clsx from 'clsx'
 
-const API = '/api'
-
-function StatCard({ title, value, unit, status, icon }) {
-  const statusColor = status === 'ok' ? '#34d399' : status === 'warn' ? '#fbbf24' : '#94a3b8'
-  return (
-    <div className="card p-4">
-      <div className="flex items-center justify-between mb-2">
-        <span className="text-xs font-mono" style={{ color: '#64748b' }}>{title}</span>
-        <span style={{ fontSize: 18 }}>{icon}</span>
-      </div>
-      <div className="flex items-baseline gap-1">
-        <span className="text-2xl font-semibold" style={{ color: statusColor }}>
-          {value !== null && value !== undefined ? value : '—'}
-        </span>
-        {unit && <span className="text-xs" style={{ color: '#64748b' }}>{unit}</span>}
-      </div>
-    </div>
-  )
+function safeVal(v) {
+  if (v == null) return null
+  if (typeof v === 'number') return isNaN(v) ? null : v
+  if (typeof v === 'object' && 'value' in v) return safeVal(v.value)
+  const n = Number(v)
+  return Number.isFinite(n) ? n : null
 }
 
 export default function Dashboard() {
-  const [health, setHealth] = useState(null)
-  const [weather, setWeather] = useState(null)
-  const [loading, setLoading] = useState(true)
+  const {
+    waterQuality, habAssessment, weather, alerts, loading,
+    nerrs, hfradar, aqi,
+    fetchAll, fetchNERRS, fetchHFRadar, fetchAQI, lastUpdated
+  } = useStore()
+
+  const isLoading = Object.values(loading).some(Boolean)
 
   useEffect(() => {
-    const fetchData = async () => {
-      try {
-        const [hRes, wRes] = await Promise.allSettled([
-          fetch(`${API}/health`).then(r => r.json()),
-          fetch(`${API}/weather/current`).then(r => r.json()),
-        ])
-        if (hRes.status === 'fulfilled') setHealth(hRes.value)
-        if (wRes.status === 'fulfilled') setWeather(wRes.value)
-      } catch (e) {
-        console.error(e)
-      } finally {
-        setLoading(false)
-      }
-    }
-    fetchData()
-    const interval = setInterval(fetchData, 60000)
-    return () => clearInterval(interval)
+    fetchNERRS()
+    fetchHFRadar()
+    fetchAQI()
   }, [])
 
-  const cur = weather?.current || {}
+  const habProb = habAssessment?.hab?.probability
+  const habLevel = habAssessment?.hab?.riskLevel
+  const hypoxia = habAssessment?.hypoxia
+
+  const habTimeline = habAssessment?.hab?.seasonalTimeline || [
+    { month: 'Jan', probability: 10 }, { month: 'Feb', probability: 12 },
+    { month: 'Mar', probability: 18 }, { month: 'Apr', probability: 25 },
+    { month: 'May', probability: 35 }, { month: 'Jun', probability: 55 },
+    { month: 'Jul', probability: 72 }, { month: 'Aug', probability: 78 },
+    { month: 'Sep', probability: 65 }, { month: 'Oct', probability: 40 },
+    { month: 'Nov', probability: 20 }, { month: 'Dec', probability: 12 },
+  ]
+
+  const usgs = waterQuality?.usgs || []
+  const do2Vals = usgs.map(s => safeVal(s.readings?.do_mg_l)).filter(v => v != null)
+  const do2 = do2Vals.length ? Math.min(...do2Vals) : null
+  const doAlert = do2 != null && do2 < 4
+
+  const streamflow = usgs.reduce((sum, s) => {
+    const f = safeVal(s.readings?.streamflow_cfs)
+    return f != null ? sum + f : sum
+  }, 0) || null
+
+  const tempF = safeVal(weather?.current?.temp_f)
+  const tempC = safeVal(weather?.current?.temp_c)
+  const windMph = safeVal(weather?.current?.wind_mph)
+  const windDir = safeVal(weather?.current?.wind_direction)
+  const salinity = safeVal(waterQuality?.coops?.['8735180']?.salinity?.value)
 
   return (
-    <div className="p-6 space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-white mb-1">🌊 TERRAWATCH</h1>
-        <p className="text-sm" style={{ color: '#64748b' }}>
-          Planetary Environmental Intelligence — Mobile Bay & Gulf Coast
-        </p>
-      </div>
+    <div className="p-6 max-w-7xl animate-in">
+      <PageHeader
+        icon="◎"
+        title="Environmental Dashboard"
+        subtitle="Mobile Bay · Real-time monitoring · 22+ government data feeds"
+        actions={
+          <div className="flex items-center gap-2">
+            {lastUpdated && (
+              <span className="tw-mono text-[9px] text-bay-300">
+                {new Date(lastUpdated).toLocaleTimeString()}
+              </span>
+            )}
+            <button onClick={fetchAll} disabled={isLoading}
+              className="tw-btn-primary disabled:opacity-50">
+              {isLoading ? <Spinner size={14} /> : '↺'}
+              Refresh
+            </button>
+          </div>
+        }
+      />
 
-      {health && (
-        <div className="flex items-center gap-2 text-xs font-mono px-3 py-2 rounded-md" style={{ backgroundColor: '#0f2418', border: '1px solid #166534', color: '#4ade80' }}>
-          <span style={{ width: 8, height: 8, borderRadius: '50%', backgroundColor: '#4ade80', display: 'inline-block' }} />
-          System {health.status} — v{health.version} — {new Date(health.timestamp).toLocaleTimeString()}
+      {alerts.length > 0 && (
+        <AlertBanner type="warning">
+          <strong>{alerts.length} active NWS alert{alerts.length > 1 ? 's' : ''}:</strong>{' '}
+          {alerts[0]?.headline}
+        </AlertBanner>
+      )}
+
+      <Section title="Current Conditions">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <StatCard label="HAB Probability" value={habProb ?? '—'} unit="%" color={habProb >= 65 ? '#dc2626' : habProb >= 45 ? '#d97706' : '#0a9e80'} icon="⬡" sub={habLevel ? <RiskBadge level={habLevel} /> : 'Calculating...'} alert={habProb >= 65} />
+          <StatCard label="Dissolved Oxygen" value={do2 != null ? do2.toFixed(1) : '—'} unit="mg/L" color={doAlert ? '#dc2626' : '#0a9e80'} icon="○" sub={do2 != null ? (doAlert ? '⚠ Below stress threshold' : 'Acceptable range') : 'No data'} alert={doAlert} />
+          <StatCard label="Water Temperature" value={tempF != null ? tempF.toFixed(1) : tempC != null ? tempC.toFixed(1) : '—'} unit={tempF != null ? '°F' : '°C'} color="#1d6fcc" icon="≋" sub={tempC != null ? `${tempC.toFixed(1)}°C` : null} />
+          <StatCard label="Salinity" value={salinity != null ? salinity.toFixed(1) : '—'} unit="ppt" color="#7c3aed" icon="◈" sub="Dauphin Island" />
+          <StatCard label="Hypoxia Risk" value={hypoxia?.probability ?? '—'} unit="%" color={hypoxia?.probability >= 60 ? '#dc2626' : '#d97706'} icon="〇" sub={hypoxia?.riskLevel ? <RiskBadge level={hypoxia.riskLevel} /> : null} />
+          <StatCard label="Streamflow" value={streamflow != null ? (streamflow / 1000).toFixed(0) : '—'} unit="K cfs" color="#1d6fcc" icon="〜" sub="Alabama R. + Mobile R." />
+          <StatCard label="Wind Speed" value={windMph != null ? windMph.toFixed(0) : '—'} unit="mph" color="#0a9e80" icon="≈" sub={windDir != null ? `${windDir}° direction` : weather?.current?.description} />
+          <StatCard label="Jubilee Risk" value={hypoxia?.jubileeRisk ? 'ELEVATED' : 'LOW'} color={hypoxia?.jubileeRisk ? '#dc2626' : '#0a9e80'} icon="★" sub="Mobile Bay east shore" alert={hypoxia?.jubileeRisk} />
+        </div>
+      </Section>
+
+      {(nerrs?.waterQuality?.available || hfradar?.available || aqi?.available) && (
+        <div className="tw-card mb-4 border-teal-200" style={{background:'#f0fdf9'}}>
+          <div className="tw-label text-teal-600 mb-2">New Live Feeds — Earthdata + Copernicus + AirNow</div>
+          <div className="flex flex-wrap gap-4">
+            {nerrs?.waterQuality?.available && (() => {
+              const d = nerrs.waterQuality.latest || {}
+              const doV = d.DO_mgl?.value
+              return (
+                <div className="flex items-center gap-2">
+                  <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"/>
+                  <div>
+                    <div className="tw-label mb-0.5">NERRS Weeks Bay</div>
+                    <div className="tw-mono text-sm font-bold text-teal-700">
+                      {doV!=null?parseFloat(doV).toFixed(1):'—'} mg/L DO₂
+                      {d.Temp?.value!=null&&<span className="text-bay-400 font-normal ml-2">{parseFloat(d.Temp.value).toFixed(1)}°C</span>}
+                      {d.Sal?.value!=null&&<span className="text-bay-400 font-normal ml-2">{parseFloat(d.Sal.value).toFixed(1)} ppt</span>}
+                    </div>
+                  </div>
+                </div>
+              )
+            })()}
+            {hfradar?.available && (
+              <div className="flex items-center gap-2">
+                <div className="w-2 h-2 rounded-full bg-blue-500 animate-pulse"/>
+                <div>
+                  <div className="tw-label mb-0.5">HF Radar — Bloom Transport</div>
+                  <div className="tw-mono text-sm font-bold text-blue-700">
+                    {hfradar.avgSpeed_ms?.toFixed(2)} m/s {hfradar.directionCardinal}
+                    <span className="text-bay-400 font-normal ml-2">~{hfradar.bloom_transport?.distance_14h_km?.toFixed(0)} km in 14h</span>
+                  </div>
+                </div>
+              </div>
+            )}
+            {aqi?.available && aqi.readings?.[0] && (
+              <div className="flex items-center gap-2">
+                <div className="w-2 h-2 rounded-full bg-amber-500 animate-pulse"/>
+                <div>
+                  <div className="tw-label mb-0.5">AirNow AQI</div>
+                  <div className="tw-mono text-sm font-bold text-amber-700">
+                    {aqi.readings[0].aqi} AQI
+                    <span className="text-bay-400 font-normal ml-2">{aqi.readings[0].category}</span>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       )}
 
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <StatCard title="TEMPERATURE" value={cur.temp_f ? cur.temp_f.toFixed(1) : null} unit="°F" status="ok" icon="🌡️" />
-        <StatCard title="WIND SPEED" value={cur.wind_speed_mph ? cur.wind_speed_mph.toFixed(1) : null} unit="mph" status="ok" icon="💨" />
-        <StatCard title="HUMIDITY" value={cur.humidity ? cur.humidity.toFixed(0) : null} unit="%" status="ok" icon="💧" />
-        <StatCard title="PRESSURE" value={cur.pressure_mb ? cur.pressure_mb.toFixed(1) : null} unit="mb" status="ok" icon="📊" />
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div className="card p-4">
-          <h2 className="text-sm font-semibold text-white mb-3">Current Conditions</h2>
-          {loading ? (
-            <div className="space-y-2">
-              {[1,2,3].map(i => <div key={i} className="h-4 rounded animate-pulse" style={{ backgroundColor: '#1e293b' }} />)}
-            </div>
-          ) : weather ? (
-            <div className="space-y-2 text-sm">
-              <div className="flex justify-between">
-                <span style={{ color: '#64748b' }}>Description</span>
-                <span className="text-white">{cur.description || '—'}</span>
-              </div>
-              <div className="flex justify-between">
-                <span style={{ color: '#64748b' }}>Wind Direction</span>
-                <span className="text-white">{cur.wind_direction ? `${cur.wind_direction}°` : '—'}</span>
-              </div>
-              <div className="flex justify-between">
-                <span style={{ color: '#64748b' }}>Last Updated</span>
-                <span className="text-white">{cur.timestamp ? new Date(cur.timestamp).toLocaleTimeString() : '—'}</span>
-              </div>
-            </div>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+        <div className="tw-card">
+          <div className="flex items-center justify-between mb-3">
+            <div className="tw-label">HAB Oracle — Seasonal Probability</div>
+            <span className="tw-mono text-[8px] px-1.5 py-0.5 rounded bg-teal-100 text-teal-700 border border-teal-200">★ WORLD FIRST</span>
+          </div>
+          {isLoading ? (
+            <div className="flex justify-center py-10"><Spinner /></div>
+          ) : habTimeline.length ? (
+            <HABProbabilityChart data={habTimeline} />
           ) : (
-            <p className="text-sm" style={{ color: '#64748b' }}>Weather data unavailable</p>
+            <EmptyState message="Loading HAB data..." />
+          )}
+          {habAssessment?.hab && (
+            <div className="mt-3 pt-3 border-t border-bay-50 text-xs text-bay-400">
+              {habAssessment.hab.action}
+            </div>
           )}
         </div>
 
-        <div className="card p-4">
-          <h2 className="text-sm font-semibold text-white mb-3">7-Day Forecast</h2>
-          {loading ? (
-            <div className="space-y-2">
-              {[1,2,3].map(i => <div key={i} className="h-4 rounded animate-pulse" style={{ backgroundColor: '#1e293b' }} />)}
-            </div>
-          ) : weather?.forecast ? (
-            <div className="space-y-1">
-              {weather.forecast.slice(0, 4).map((p, i) => (
-                <div key={i} className="flex justify-between text-xs">
-                  <span style={{ color: '#94a3b8' }}>{p.name}</span>
-                  <span className="text-white truncate max-w-[60%] text-right">{p.shortForecast}</span>
+        <div className="tw-card">
+          <div className="tw-label mb-3">Station Network Status</div>
+          <div className="space-y-2">
+            {(waterQuality?.usgs || []).slice(0, 5).map(s => {
+              const hasData = Object.keys(s.readings || {}).length > 0
+              const do2Val = safeVal(s.readings?.do_mg_l)
+              return (
+                <div key={s.siteNo} className="flex items-center gap-2 py-1.5 border-b border-bay-50 last:border-0">
+                  <div className={clsx('w-2 h-2 rounded-full flex-shrink-0', hasData ? 'bg-emerald-500' : 'bg-bay-300')} />
+                  <div className="flex-1 min-w-0">
+                    <div className="text-xs text-bay-700 font-medium truncate">{s.name}</div>
+                    <div className="tw-mono text-[9px] text-bay-300">{s.siteNo}</div>
+                  </div>
+                  {do2Val != null && (
+                    <div className={clsx('tw-mono text-xs font-bold', do2Val < 4 ? 'text-red-600' : do2Val < 6 ? 'text-amber-600' : 'text-teal-700')}>
+                      {typeof do2Val === 'number' ? do2Val.toFixed(1) : '—'} mg/L
+                    </div>
+                  )}
+                  {safeVal(s.readings?.streamflow_cfs) !== null && (
+                    <div className="tw-mono text-[10px] text-bay-400">
+                      {(safeVal(s.readings.streamflow_cfs) / 1000).toFixed(0)}K cfs
+                    </div>
+                  )}
                 </div>
-              ))}
+              )
+            })}
+            {(!waterQuality?.usgs || waterQuality.usgs.length === 0) && (
+              isLoading
+                ? <div className="flex justify-center py-6"><Spinner /></div>
+                : <EmptyState icon="≋" message="Fetching USGS station data..." />
+            )}
+          </div>
+          <div className="mt-3 pt-2 border-t border-bay-50 flex items-center justify-between">
+            <div className="tw-label">CO-OPS Tidal Stations</div>
+            <div className="tw-mono text-[9px] text-bay-300">
+              {Object.keys(waterQuality?.coops || {}).length} active
             </div>
-          ) : (
-            <p className="text-sm" style={{ color: '#64748b' }}>Forecast unavailable</p>
-          )}
-        </div>
-      </div>
-
-      <div className="card p-4">
-        <h2 className="text-sm font-semibold text-white mb-3">Active Data Sources</h2>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          {[
-            { name: 'USGS NWIS', desc: 'Water Quality', status: true },
-            { name: 'NOAA CO-OPS', desc: 'Tidal Data', status: true },
-            { name: 'NOAA NWS', desc: 'Weather', status: true },
-            { name: 'NOAA NDBC', desc: 'Buoy Data', status: true },
-          ].map(src => (
-            <div key={src.name} className="flex items-start gap-2 p-2 rounded" style={{ backgroundColor: '#0a0d12' }}>
-              <span style={{ width: 8, height: 8, borderRadius: '50%', backgroundColor: src.status ? '#34d399' : '#ef4444', flexShrink: 0, marginTop: 4 }} />
-              <div>
-                <div className="text-xs font-semibold text-white">{src.name}</div>
-                <div className="text-xs" style={{ color: '#64748b' }}>{src.desc}</div>
-              </div>
+          </div>
+          {Object.values(waterQuality?.coops || {}).map(s => (
+            <div key={s.id} className="flex items-center gap-2 py-1 text-xs">
+              <div className="w-2 h-2 rounded-full bg-blue-400 flex-shrink-0" />
+              <span className="text-bay-500 flex-1">{s.name}</span>
+              {s.water_level?.value != null && (
+                <span className="tw-mono text-blue-600 font-semibold">{s.water_level.value.toFixed(1)} ft</span>
+              )}
+              {s.salinity?.value != null && (
+                <span className="tw-mono text-purple-600 font-semibold">{s.salinity.value.toFixed(1)} ppt</span>
+              )}
             </div>
           ))}
         </div>
       </div>
+
+      {habAssessment?.hab && (
+        <Section title="HAB Oracle Assessment Detail">
+          <div className="tw-card">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
+              <div>
+                <div className="tw-label mb-1">Current Probability</div>
+                <div className="text-3xl font-bold tw-mono" style={{ color: habProb >= 65 ? '#dc2626' : '#0a9e80' }}>
+                  {habProb}%
+                </div>
+              </div>
+              <div>
+                <div className="tw-label mb-1">Risk Level</div>
+                <RiskBadge level={habLevel} size="lg" />
+              </div>
+              <div>
+                <div className="tw-label mb-1">Seasonal Prior</div>
+                <div className="tw-mono text-lg font-bold text-bay-700">{habAssessment.hab.seasonalPrior}%</div>
+              </div>
+              <div>
+                <div className="tw-label mb-1">Data Confidence</div>
+                <div className="tw-mono text-sm font-bold text-teal-700">{habAssessment.hab.dataQuality?.confidence}</div>
+                <div className="text-[10px] text-bay-300 tw-mono mt-0.5">
+                  {habAssessment.hab.dataQuality?.inputCount}/{habAssessment.hab.dataQuality?.totalInputs} feeds
+                </div>
+              </div>
+            </div>
+
+            <div className="border-t border-bay-50 pt-4">
+              <div className="tw-label mb-2">48–72 Hour Outlook</div>
+              <div className="grid grid-cols-3 gap-3">
+                {[
+                  { label: '+24h', val: habAssessment.hab.outlook?.h24 },
+                  { label: '+48h', val: habAssessment.hab.outlook?.h48 },
+                  { label: '+72h', val: habAssessment.hab.outlook?.h72 },
+                ].map(({ label, val }) => (
+                  <div key={label} className="text-center p-3 rounded-lg bg-bay-50">
+                    <div className="tw-label mb-1">{label}</div>
+                    <div className="tw-mono text-xl font-bold" style={{ color: val >= 65 ? '#dc2626' : val >= 45 ? '#d97706' : '#0a9e80' }}>
+                      {val ?? '—'}%
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="mt-4 p-3 rounded-lg bg-bay-50 border border-bay-100">
+              <div className="tw-label mb-1">Recommended Action</div>
+              <div className="text-sm text-bay-600">{habAssessment.hab.action}</div>
+            </div>
+
+            <div className="mt-3 tw-mono text-[8px] text-bay-300">
+              {habAssessment.hab.methodology}
+            </div>
+          </div>
+        </Section>
+      )}
     </div>
   )
 }

@@ -17,6 +17,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url))
 const app = express()
 const PORT = process.env.PORT || (process.env.NODE_ENV === 'production' ? 5000 : 3001)
 
+app.set('trust proxy', 1)
 app.use(cors({ origin: '*' }))
 app.use(express.json())
 
