@@ -20,6 +20,7 @@ const NAV = [
   { path: '/ai-assistant', label: 'AI Field Assistant', icon: '◇' },
   { path: '/ml-architecture', label: 'ML Architecture v2', icon: '⬢', badge: 'RESEARCH' },
   { path: '/vision', label: 'Vision', icon: '★' },
+  { path: '/roadmap', label: 'Master Roadmap', icon: '◆', badge: 'STRATEGY' },
 ]
 
 export default function Layout() {

@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import React, { useEffect, Suspense } from 'react'
 import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import { useStore } from './store/index.js'
 import Layout from './components/Layout/Layout.jsx'
@@ -17,6 +17,7 @@ import ScienceView from './pages/ScienceView.jsx'
 import Intelligence from './pages/Intelligence.jsx'
 import AlertsPage from './pages/Alerts.jsx'
 import AIAssistant from './pages/AIAssistant.jsx'
+const MasterRoadmap = React.lazy(() => import('./pages/MasterRoadmap.jsx'))
 
 export default function App() {
   const { fetchAll, liveMode } = useStore()
@@ -49,6 +50,7 @@ export default function App() {
           <Route path="science" element={<ScienceView />} />
           <Route path="intelligence" element={<Intelligence />} />
           <Route path="vision" element={<VisionPage />} />
+          <Route path="roadmap" element={<Suspense fallback={<div style={{padding:40,textAlign:'center',color:'#6b7280'}}>Loading Roadmap…</div>}><MasterRoadmap /></Suspense>} />
           <Route path="ml-architecture" element={<MLArchitecture />} />
           <Route path="*" element={<Dashboard />} />
         </Route>
