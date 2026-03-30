@@ -199,7 +199,7 @@ export default function WaterQuality() {
       <div className="px-6 pt-5 pb-2">
         <div className="flex items-center justify-between mb-1">
           <div>
-            <h1 className="text-xl font-bold text-white flex items-center gap-2">
+            <h1 className="text-xl font-bold text-bay-900 flex items-center gap-2">
               💧 Water Quality & Satellite Imagery
             </h1>
             <p className="text-xs text-bay-400 mt-0.5">
@@ -255,7 +255,7 @@ export default function WaterQuality() {
             <div className="w-2 h-2 rounded-full" style={{ background: currentLayer.color }} />
             <span className="text-xs text-bay-400">{currentLayer.desc}</span>
             <span className="tw-mono text-[9px] text-bay-300 ml-2">{formatDate(daysBack)}</span>
-            <span className="tw-mono text-[9px] px-1.5 py-0.5 rounded bg-blue-900/30 text-blue-400 border border-blue-800 ml-auto">
+            <span className="tw-mono text-[9px] px-1.5 py-0.5 rounded bg-blue-50 text-blue-600 border border-blue-200 ml-auto">
               NASA GIBS — Free, No Auth Required
             </span>
           </div>
@@ -295,7 +295,7 @@ export default function WaterQuality() {
           {selectedStation && (
             <div className="tw-card border-teal-700">
               <div className="tw-label text-teal-400 mb-1">Selected Station</div>
-              <div className="font-semibold text-sm text-white mb-1">{selectedStation.name}</div>
+              <div className="font-semibold text-sm text-bay-800 mb-1">{selectedStation.name}</div>
               <div className="tw-mono text-[9px] text-bay-300 mb-2">{selectedStation.id} · {selectedStation.type.toUpperCase()}</div>
               <div className="text-xs text-bay-500 space-y-0.5">
                 <div>Lat: {selectedStation.lat.toFixed(4)}°N</div>
@@ -373,8 +373,8 @@ export default function WaterQuality() {
             })}
           </div>
 
-          <div className="tw-card bg-blue-900/20 border-blue-800">
-            <div className="tw-label text-blue-400 mb-1.5">Satellite Data Sources</div>
+          <div className="tw-card bg-blue-50 border-blue-200">
+            <div className="tw-label text-blue-600 mb-1.5">Satellite Data Sources</div>
             <div className="space-y-1.5">
               {[
                 { name: 'MODIS Terra/Aqua', freq: 'Daily', type: 'True Color, CHL, SST', src: 'NASA' },
@@ -382,8 +382,8 @@ export default function WaterQuality() {
                 { name: 'NASA PACE OCI', freq: 'Daily', type: 'Hyperspectral (PENDING)', src: 'NASA' },
               ].map(s => (
                 <div key={s.name} className="text-xs">
-                  <div className="font-medium text-blue-300">{s.name}</div>
-                  <div className="text-blue-400/70">{s.type} · {s.freq}</div>
+                  <div className="font-medium text-blue-700">{s.name}</div>
+                  <div className="text-blue-500">{s.type} · {s.freq}</div>
                 </div>
               ))}
             </div>

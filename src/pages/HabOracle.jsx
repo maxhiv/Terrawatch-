@@ -17,7 +17,7 @@ function RiskGauge({ probability, riskLevel }) {
     <div className="flex flex-col items-center">
       <div className="relative" style={{ width: 200, height: 120 }}>
         <svg width="200" height="120" viewBox="0 0 200 120">
-          <path d="M 20 100 A 80 80 0 0 1 180 100" fill="none" stroke="#1e293b" strokeWidth="16" strokeLinecap="round" />
+          <path d="M 20 100 A 80 80 0 0 1 180 100" fill="none" stroke="#d1e7dd" strokeWidth="16" strokeLinecap="round" />
           <path
             d={`M 20 100 A 80 80 0 0 1 180 100`}
             fill="none"
@@ -67,38 +67,37 @@ export default function HabOracle() {
   return (
     <div className="p-6 space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-white">🔬 HAB Oracle</h1>
-        <p className="text-sm mt-1" style={{ color: '#64748b' }}>
+        <h1 className="text-2xl font-bold text-bay-900">🔬 HAB Oracle</h1>
+        <p className="text-sm mt-1 text-bay-500">
           48–72h Harmful Algal Bloom pre-bloom prediction — Mobile Bay (World First™)
         </p>
       </div>
 
       {loading && (
-        <div className="card p-8 flex items-center justify-center gap-3">
-          <div className="w-6 h-6 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
-          <span style={{ color: '#64748b' }}>Running HAB Oracle assessment...</span>
+        <div className="tw-card p-8 flex items-center justify-center gap-3">
+          <div className="w-6 h-6 border-2 border-teal-500 border-t-transparent rounded-full animate-spin" />
+          <span className="text-bay-500">Running HAB Oracle assessment...</span>
         </div>
       )}
 
       {error && (
-        <div className="card p-4" style={{ borderColor: '#991b1b' }}>
-          <p className="text-sm text-red-400">Error: {error}</p>
+        <div className="tw-card p-4 border-red-300">
+          <p className="text-sm text-red-600">Error: {error}</p>
         </div>
       )}
 
       {hab && (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div className="card p-6">
-            <h2 className="text-sm font-semibold text-white mb-4">HAB Risk Assessment</h2>
+          <div className="tw-card p-6">
             <RiskGauge probability={hab.probability} riskLevel={hab.riskLevel} />
-            <div className="mt-4 p-3 rounded" style={{ backgroundColor: '#0a0d12' }}>
-              <p className="text-xs font-semibold mb-1" style={{ color: '#94a3b8' }}>RECOMMENDED ACTION</p>
-              <p className="text-sm text-white">{hab.action}</p>
+            <div className="mt-4 p-3 rounded-lg bg-bay-800 text-white">
+              <p className="text-xs font-semibold mb-1 text-bay-200">RECOMMENDED ACTION</p>
+              <p className="text-sm">{hab.action}</p>
             </div>
           </div>
 
-          <div className="card p-6">
-            <h2 className="text-sm font-semibold text-white mb-4">72-Hour Outlook</h2>
+          <div className="tw-card p-6">
+            <h2 className="text-sm font-semibold text-bay-700 mb-4">72-Hour Outlook</h2>
             <div className="space-y-3">
               {[
                 { label: '24h', val: hab.outlook?.h24 },
@@ -110,10 +109,10 @@ export default function HabOracle() {
                 return (
                   <div key={label}>
                     <div className="flex justify-between text-xs mb-1">
-                      <span style={{ color: '#94a3b8' }}>{label}</span>
+                      <span className="text-bay-500">{label}</span>
                       <span style={{ color, fontFamily: 'monospace' }}>{pct}%</span>
                     </div>
-                    <div className="h-2 rounded-full" style={{ backgroundColor: '#1e293b' }}>
+                    <div className="h-2 rounded-full bg-bay-100">
                       <div className="h-2 rounded-full transition-all" style={{ width: `${pct}%`, backgroundColor: color }} />
                     </div>
                   </div>
@@ -122,12 +121,12 @@ export default function HabOracle() {
             </div>
 
             <div className="mt-4">
-              <h3 className="text-xs font-semibold mb-2" style={{ color: '#94a3b8' }}>TOP RISK FACTORS</h3>
+              <h3 className="text-xs font-semibold mb-2 text-bay-400">TOP RISK FACTORS</h3>
               <div className="space-y-1">
                 {hab.rankedFactors?.map((f, i) => (
                   <div key={i} className="flex justify-between text-xs">
-                    <span className="text-white">{f.name}</span>
-                    <span className="font-mono" style={{ color: '#38bdf8' }}>{f.score}%</span>
+                    <span className="text-bay-700">{f.name}</span>
+                    <span className="font-mono text-teal-600">{f.score}%</span>
                   </div>
                 ))}
               </div>
@@ -135,8 +134,8 @@ export default function HabOracle() {
           </div>
 
           {hypoxia && (
-            <div className="card p-6">
-              <h2 className="text-sm font-semibold text-white mb-4">Hypoxia Forecast (5-day)</h2>
+            <div className="tw-card p-6">
+              <h2 className="text-sm font-semibold text-bay-700 mb-4">Hypoxia Forecast (5-day)</h2>
               <div className="flex items-center gap-4">
                 <div className="text-4xl font-bold font-mono" style={{ color: RISK_COLORS[hypoxia.riskLevel] || '#94a3b8' }}>
                   {hypoxia.probability}%
@@ -145,11 +144,11 @@ export default function HabOracle() {
                   <div className="text-sm font-semibold" style={{ color: RISK_COLORS[hypoxia.riskLevel] || '#94a3b8' }}>
                     {hypoxia.riskLevel}
                   </div>
-                  <div className="text-xs" style={{ color: '#64748b' }}>
+                  <div className="text-xs text-bay-500">
                     Expected min DO: {hypoxia.expectedMinDO} mg/L
                   </div>
                   {hypoxia.jubileeRisk && (
-                    <div className="text-xs mt-1" style={{ color: '#fbbf24' }}>
+                    <div className="text-xs mt-1 text-amber-600">
                       ⚠️ Jubilee conditions possible
                     </div>
                   )}
@@ -158,27 +157,27 @@ export default function HabOracle() {
             </div>
           )}
 
-          <div className="card p-6">
-            <h2 className="text-sm font-semibold text-white mb-3">Data Quality</h2>
+          <div className="tw-card p-6">
+            <h2 className="text-sm font-semibold text-bay-700 mb-3">Data Quality</h2>
             <div className="space-y-2 text-sm">
               <div className="flex justify-between">
-                <span style={{ color: '#64748b' }}>Confidence</span>
-                <span className="text-white">{hab.dataQuality?.confidence}</span>
+                <span className="text-bay-500">Confidence</span>
+                <span className="text-bay-800">{hab.dataQuality?.confidence}</span>
               </div>
               <div className="flex justify-between">
-                <span style={{ color: '#64748b' }}>Inputs Available</span>
-                <span className="text-white">{hab.dataQuality?.inputCount} / {hab.dataQuality?.totalInputs}</span>
+                <span className="text-bay-500">Inputs Available</span>
+                <span className="text-bay-800">{hab.dataQuality?.inputCount} / {hab.dataQuality?.totalInputs}</span>
               </div>
               <div className="flex justify-between">
-                <span style={{ color: '#64748b' }}>Seasonal Prior</span>
-                <span className="text-white">{hab.seasonalPrior}%</span>
+                <span className="text-bay-500">Seasonal Prior</span>
+                <span className="text-bay-800">{hab.seasonalPrior}%</span>
               </div>
               <div className="flex justify-between">
-                <span style={{ color: '#64748b' }}>Oracle Version</span>
-                <span className="font-mono text-white">{hab.version}</span>
+                <span className="text-bay-500">Oracle Version</span>
+                <span className="font-mono text-bay-800">{hab.version}</span>
               </div>
             </div>
-            <div className="mt-3 text-xs" style={{ color: '#475569' }}>
+            <div className="mt-3 text-xs text-bay-500">
               {hab.methodology}
             </div>
           </div>
