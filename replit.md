@@ -9,6 +9,8 @@ Planetary Environmental Intelligence Platform — Mobile Bay & Gulf Coast
 - **Package manager**: npm
 - **Runtime**: Node.js 20
 - **State management**: Zustand
+- **Database**: SQLite via sql.js (pure JS, `data/terrawatch.db`)
+- **ML Pipeline**: Logistic regression (Phase 1) → Random Forest (Phase 2) → CNN-LSTM on Vertex AI (Phase 3)
 - **Styling**: Tailwind CSS (light green/white bay theme)
 - **Charts**: Recharts
 - **Maps**: Leaflet
@@ -49,7 +51,9 @@ terrawatch/
 │   │   ├── weather.js          # /api/weather/* (NWS forecast)
 │   │   ├── alerts.js           # /api/alerts (weather alerts)
 │   │   ├── sensors.js          # /api/sensors/* (registry + hfradar, nerrs, pace, methane, epa, openeo)
-│   │   └── ai.js               # /api/ai/* (Anthropic assistant)
+│   │   ├── ai.js               # /api/ai/* (Anthropic assistant)
+│   │   ├── intelligence.js     # /api/intelligence/* (DB stats, retrain, inference, vectors, events)
+│   │   └── mlArchitecture.js   # /api/ml/* (ML architecture status)
 │   ├── services/
 │   │   ├── usgs.js             # USGS NWIS water data
 │   │   ├── noaa.js             # NOAA CO-OPS, NWS, NDBC
@@ -58,7 +62,10 @@ terrawatch/
 │   │   ├── pace.js             # NASA PACE OCI ocean color
 │   │   ├── tropomi.js          # Sentinel-5P CH4 methane
 │   │   ├── epa.js              # EPA ECHO/WQP/AirNow/TRI
-│   │   └── openeo.js           # Copernicus Algorithm Plaza (8 algorithms)
+│   │   ├── openeo.js           # Copernicus Algorithm Plaza (8 algorithms)
+│   │   ├── database.js         # SQLite persistence (sql.js, 5 tables)
+│   │   ├── crossSensor.js      # Cross-sensor feature assembly + auto-labeling
+│   │   └── mlTrainer.js        # ML training pipeline (Phase 1-3)
 │   └── ml/habOracle.js         # HAB Oracle algorithm
 ├── vite.config.js              # Vite (port 5000, proxy /api → :3001)
 ├── tailwind.config.js          # Bay palette (light greens)

@@ -9,6 +9,7 @@ const NAV = [
   { path: '/water-quality', label: 'Water Quality', icon: '≋' },
   { path: '/map', label: 'Satellite Map', icon: '🛰️' },
   { path: '/science', label: 'Science View', icon: '⬢', badge: 'SCIENTIST' },
+  { path: '/intelligence', label: 'Intelligence', icon: '◈', badge: 'ML' },
   { path: '/sensors', label: 'Sensor Registry', icon: '⊞' },
   { path: '/feeds', label: 'Feed Status', icon: '◉' },
   null,

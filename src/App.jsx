@@ -14,6 +14,7 @@ import MLArchitecture from './pages/MLArchitecture.jsx'
 import FeedStatus from './pages/FeedStatus.jsx'
 import MapPage from './pages/MapPage.jsx'
 import ScienceView from './pages/ScienceView.jsx'
+import Intelligence from './pages/Intelligence.jsx'
 import AlertsPage from './pages/Alerts.jsx'
 import AIAssistant from './pages/AIAssistant.jsx'
 
@@ -46,6 +47,7 @@ export default function App() {
           <Route path="map" element={<MapPage />} />
           <Route path="feeds" element={<FeedStatus />} />
           <Route path="science" element={<ScienceView />} />
+          <Route path="intelligence" element={<Intelligence />} />
           <Route path="vision" element={<VisionPage />} />
           <Route path="ml-architecture" element={<MLArchitecture />} />
           <Route path="*" element={<Dashboard />} />
