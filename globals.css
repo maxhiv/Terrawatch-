@@ -1,0 +1,44 @@
+import { FastifyPluginAsync } from "fastify";
+import { prisma } from "../lib/prisma.js";
+import { authMiddleware } from "../middleware/auth.js";
+import { cache } from "../lib/cache.js";
+
+export const stationRoutes: FastifyPluginAsync = async (app) => {
+  app.addHook("preHandler", authMiddleware);
+
+  app.get("/", async (req) => {
+    const { orgId } = req.user as any;
+    const cacheKey = `stations:${orgId}`;
+    const cached = cache.get(cacheKey);
+    if (cached) return cached;
+    const stations = await prisma.station.findMany({
+      where: { orgId },
+      include: {
+        readings: { orderBy: { recordedAt: "desc" }, take: 10,
+          select: { parameter: true, value: true, unit: true, recordedAt: true } },
+        _count: { select: { anomalies: { where: { resolvedAt: null } } } },
+      },
+    });
+    cache.set(cacheKey, stations, 120);
+    return stations;
+  });
+
+  app.get("/:id/readings", async (req) => {
+    const { orgId } = req.user as any;
+    const { id } = req.params as any;
+    const q = req.query as any;
+    const hours = Math.min(168, parseInt(q.hours || "24"));
+    const parameter = q.parameter as string | undefined;
+    const since = new Date(Date.now() - hours * 3600_000);
+
+    return prisma.reading.findMany({
+      where: {
+        stationId: id,
+        ...(parameter ? { parameter } : {}),
+        recordedAt: { gte: since },
+      },
+      orderBy: { recordedAt: "asc" },
+      select: { parameter: true, value: true, unit: true, quality: true, recordedAt: true },
+    });
+  });
+};

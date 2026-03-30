@@ -1,0 +1,61 @@
+import { useState } from "react";
+import { useAnomalies, useResolveAnomaly } from "../hooks/useAnomalies";
+import { toast } from "sonner";
+
+const SEVERITY_COLORS = {
+  CRITICAL: "bg-red-900/50 text-red-400 border-red-700",
+  HIGH:     "bg-orange-900/50 text-orange-400 border-orange-700",
+  MODERATE: "bg-yellow-900/50 text-yellow-400 border-yellow-700",
+  LOW:      "bg-blue-900/50 text-blue-400 border-blue-700",
+  INFO:     "bg-slate-800 text-slate-400 border-slate-700",
+};
+
+export default function Anomalies() {
+  const [severity, setSeverity] = useState("");
+  const { data, isLoading } = useAnomalies(severity ? { severity } : {});
+  const resolve = useResolveAnomaly();
+
+  const handleResolve = async (id) => {
+    try { await resolve.mutateAsync(id); toast.success("Anomaly resolved"); }
+    catch { toast.error("Failed to resolve"); }
+  };
+
+  return (
+    <div className="p-6 space-y-4">
+      <div className="flex items-center justify-between">
+        <h1 className="text-2xl font-bold text-white">Anomalies</h1>
+        <select className="input w-auto" value={severity} onChange={e=>setSeverity(e.target.value)}>
+          <option value="">All severities</option>
+          {["CRITICAL","HIGH","MODERATE","LOW"].map(s=><option key={s} value={s}>{s}</option>)}
+        </select>
+      </div>
+
+      {isLoading ? (
+        <div className="space-y-2">{[...Array(5)].map((_,i)=><div key={i} className="card h-16 animate-pulse"/>)}</div>
+      ) : (
+        <div className="space-y-2">
+          {data?.anomalies?.map(a => (
+            <div key={a.id} className="card p-4 flex items-start gap-4">
+              <span className={`text-xs font-mono px-2 py-1 rounded border flex-shrink-0 ${SEVERITY_COLORS[a.severity]}`}>
+                {a.severity}
+              </span>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="text-xs font-mono text-blue-400 bg-blue-900/30 px-1.5 py-0.5 rounded">{a.parameter}</span>
+                  <span className="text-xs text-slate-500">{a.model}</span>
+                </div>
+                <p className="text-sm text-slate-300">{a.message}</p>
+                <p className="text-xs text-slate-500 mt-1">{new Date(a.occurredAt).toLocaleString()}</p>
+              </div>
+              <div className="flex items-center gap-2 text-lg font-bold" style={{color: a.score > 70 ? "#f87171" : a.score > 40 ? "#fbbf24" : "#34d399"}}>
+                {a.score.toFixed(0)}
+              </div>
+              <button onClick={()=>handleResolve(a.id)} className="btn-ghost text-xs flex-shrink-0">Resolve</button>
+            </div>
+          ))}
+          {!data?.anomalies?.length && <div className="text-center py-16 text-slate-500">No anomalies found ✓</div>}
+        </div>
+      )}
+    </div>
+  );
+}

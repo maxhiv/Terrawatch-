@@ -1,0 +1,86 @@
+# TERRAWATCH 🌊
+
+**Planetary Environmental Intelligence — Mobile Bay & Gulf Coast**
+
+> Give the world eyes on its coastal ecosystems — so the people who depend on them can act before it's too late.
+
+## Overview
+
+TERRAWATCH is a three-product environmental intelligence platform:
+
+- **TERRAWATCH** — Real-time bay monitoring, HAB Oracle (48–72h bloom prediction), hypoxia forecasting, autonomous alerts
+- **SITEVAULT** — Industrial site intelligence for Economic Development Associations  
+- **WetlandAI** — Remote wetland pre-delineation using 7.5cm aerial imagery
+
+## Quick Start
+
+```bash
+# Clone and install
+git clone https://github.com/YOUR_ORG/terrawatch.git
+cd terrawatch
+npm install
+
+# Configure environment
+cp .env.example .env
+# Edit .env with your API keys
+
+# Run development server
+npm run dev
+```
+
+App runs at: `http://localhost:5173`  
+API server runs at: `http://localhost:3001`
+
+## Free Data Sources (No Keys Required)
+
+The following feeds work immediately with no configuration:
+- USGS NWIS — water quality and streamflow
+- NOAA CO-OPS — tidal data and water levels
+- NOAA NWS — weather forecasts and alerts
+- NOAA NDBC — offshore buoy data
+- NOAA CoastWatch — SST and chlorophyll
+
+## API Keys (Free Registration)
+
+| Source | URL | Use |
+|--------|-----|-----|
+| AirNow | airnowapi.org | Real-time AQI |
+| EPA AQS | aqs.epa.gov | Air quality monitoring |
+| NASA Earthdata | urs.earthdata.nasa.gov | MODIS, PACE, HLS |
+| eBird | ebird.org/api/keygen | Biodiversity |
+| Anthropic | console.anthropic.com | AI Field Assistant |
+
+## Architecture
+
+```
+terrawatch/
+├── src/           # React + Vite frontend
+│   ├── pages/     # Dashboard, HAB Oracle, Sensors, etc.
+│   ├── components/ # Reusable UI components
+│   ├── hooks/     # Data fetching hooks
+│   └── store/     # Zustand global state
+├── server/        # Express API server
+│   ├── routes/    # API endpoints
+│   ├── services/  # Government data feed clients
+│   └── ml/        # HAB Oracle algorithm
+└── public/        # Static assets
+```
+
+## Capabilities
+
+32 monitoring capabilities across 6 pillars including 15 World Firsts:
+- Pre-bloom HAB Oracle (48–72h advance warning)
+- Gulf Dead Zone Hypoxia Forecaster (5–7 day)
+- PFAS Source Attribution
+- Blue Carbon MRV
+- Microplastic Source Mapping
+- WetlandAI Pre-Delineation
+- And 26 more...
+
+## Built In
+
+**Fairhope, Alabama** — 12 minutes from Weeks Bay. The Gulf Coast is not a test market. It is the proving ground.
+
+## License
+
+Proprietary — Hansen Holdings LLC. All rights reserved.

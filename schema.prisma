@@ -1,0 +1,25 @@
+import { useAuthStore } from "../store/authStore";
+
+export default function Settings() {
+  const { user } = useAuthStore();
+  return (
+    <div className="p-6 space-y-6 max-w-2xl">
+      <h1 className="text-2xl font-bold text-white">Settings</h1>
+      <div className="card p-6">
+        <h2 className="text-sm font-semibold text-slate-200 mb-4">Profile</h2>
+        <div className="grid grid-cols-2 gap-4">
+          {[["Name", user?.name], ["Email", user?.email], ["Role", user?.role], ["Plan", user?.org?.plan]].map(([l,v])=>(
+            <div key={l}>
+              <label className="block text-xs text-slate-400 mb-1">{l}</label>
+              <div className="input cursor-default">{v || "—"}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+      <div className="card p-6">
+        <h2 className="text-sm font-semibold text-slate-200 mb-2">Organization</h2>
+        <p className="text-sm text-slate-400">{user?.org?.name}</p>
+      </div>
+    </div>
+  );
+}
