@@ -16,6 +16,11 @@ function buildSensorRegistry() {
   const airnowKey = hasEnv('AIRNOW_API_KEY')
   const anthropicKey = hasEnv('ANTHROPIC_API_KEY')
   const vexcelKey = hasEnv('VEXCEL_API_KEY')
+  const ebirdKey  = hasEnv('EBIRD_API_KEY')
+  const aqsCreds  = hasEnv('AQS_EMAIL','AQS_API_KEY')
+  const nceiKey   = hasEnv('NCEI_API_KEY')
+  const purpleKey = hasEnv('PURPLEAIR_API_KEY')
+  const ameriToken= hasEnv('AMERIFLUX_TOKEN')
 
   return [
     { id:'usgs_nwis',    name:'USGS NWIS',               type:'water_quality', status:'active',       feeds:22, cost:'free',      auth:'none' },
@@ -30,13 +35,48 @@ function buildSensorRegistry() {
     { id:'nasa_pace',    name:'NASA PACE OCI',           type:'satellite',     status:nasaCreds ? 'active' : 'key_required', feeds:3,  cost:'free', auth:'NASA_EARTHDATA_USER+PASS', worldFirst:true },
     { id:'tropomi_ch4',  name:'Sentinel-5P TROPOMI CH4',type:'atmospheric',   status:(copCreds || nasaCreds) ? 'active' : 'key_required', feeds:1, cost:'free', auth:'COPERNICUS_USER+PASS or NASA creds' },
     { id:'airnow',       name:'AirNow API',             type:'air_quality',   status:airnowKey ? 'active' : 'key_required', feeds:1, cost:'free', auth:'AIRNOW_API_KEY' },
+
+    { id:'modis_chl',    name:'MODIS Aqua Chlorophyll',  type:'satellite',     status:nasaCreds ? 'active' : 'key_required', feeds:1, cost:'free', auth:'NASA_EARTHDATA_USER+PASS' },
+    { id:'modis_sst',    name:'MODIS Aqua SST',          type:'satellite',     status:nasaCreds ? 'active' : 'key_required', feeds:1, cost:'free', auth:'NASA_EARTHDATA_USER+PASS' },
+    { id:'viirs_oc',     name:'VIIRS Ocean Color',       type:'satellite',     status:nasaCreds ? 'active' : 'key_required', feeds:1, cost:'free', auth:'NASA_EARTHDATA_USER+PASS' },
+    { id:'viirs_dnb',    name:'VIIRS Nighttime Lights',  type:'satellite',     status:nasaCreds ? 'active' : 'key_required', feeds:1, cost:'free', auth:'NASA_EARTHDATA_USER+PASS' },
+    { id:'hls',          name:'NASA HLS (Landsat+S2)',   type:'satellite',     status:nasaCreds ? 'active' : 'key_required', feeds:2, cost:'free', auth:'NASA_EARTHDATA_USER+PASS' },
+    { id:'landsat',      name:'Landsat Collection 2',    type:'satellite',     status:nasaCreds ? 'active' : 'key_required', feeds:1, cost:'free', auth:'NASA_EARTHDATA_USER+PASS' },
+    { id:'sentinel2',    name:'Sentinel-2 L2A (10m)',    type:'satellite',     status:copCreds ? 'active' : 'key_required', feeds:1, cost:'free', auth:'COPERNICUS_USER+PASS' },
+    { id:'cop_dem',      name:'Copernicus DEM GLO-30',   type:'elevation',     status:'active',       feeds:1, cost:'free', auth:'none' },
+
+    { id:'cmems_phys',   name:'CMEMS Ocean Physics',     type:'ocean_model',   status:copCreds ? 'active' : 'key_required', feeds:1, cost:'free', auth:'COPERNICUS_USER+PASS' },
+    { id:'cmems_bgc',    name:'CMEMS Biogeochemistry',   type:'ocean_model',   status:copCreds ? 'active' : 'key_required', feeds:1, cost:'free', auth:'COPERNICUS_USER+PASS' },
+    { id:'hycom',        name:'HYCOM Ocean Model',       type:'ocean_model',   status:'active',       feeds:1, cost:'free', auth:'none' },
+    { id:'coastwatch',   name:'NOAA CoastWatch ERDDAP',  type:'ocean_obs',     status:'active',       feeds:1, cost:'free', auth:'none' },
+    { id:'streamstats',  name:'USGS StreamStats',        type:'hydrology',     status:'active',       feeds:1, cost:'free', auth:'none' },
+    { id:'digitalcoast', name:'NOAA Digital Coast',      type:'coastal',       status:'active',       feeds:1, cost:'free', auth:'none' },
+
+    { id:'inaturalist',  name:'iNaturalist',             type:'biodiversity',  status:'active',       feeds:1, cost:'free', auth:'none' },
+    { id:'gbif',         name:'GBIF Occurrences',        type:'biodiversity',  status:'active',       feeds:1, cost:'free', auth:'none' },
+    { id:'ebird',        name:'eBird Cornell Lab',       type:'biodiversity',  status:ebirdKey ? 'active' : 'key_required', feeds:1, cost:'free', auth:'EBIRD_API_KEY' },
+    { id:'ameriflux',    name:'AmeriFlux Flux Towers',   type:'carbon',        status:ameriToken ? 'active' : 'key_required', feeds:1, cost:'free', auth:'AMERIFLUX_TOKEN', worldFirst:true },
+
+    { id:'openmeteo',    name:'Open-Meteo Weather',      type:'weather',       status:'active',       feeds:1, cost:'free', auth:'none' },
+    { id:'noaa_ahps',    name:'NOAA AHPS Flood Stage',   type:'hydrology',     status:'active',       feeds:1, cost:'free', auth:'none' },
+    { id:'ncei',         name:'NOAA NCEI Climate',       type:'climate',       status:nceiKey ? 'active' : 'key_required', feeds:1, cost:'free', auth:'NCEI_API_KEY' },
+    { id:'ssurgo',       name:'NRCS SSURGO Soils',       type:'land',          status:'active',       feeds:1, cost:'free', auth:'none' },
+    { id:'nwi',          name:'USGS NWI Wetlands',       type:'land',          status:'active',       feeds:1, cost:'free', auth:'none' },
+    { id:'fema_firm',    name:'FEMA FIRM Flood Zones',   type:'regulatory',    status:'active',       feeds:1, cost:'free', auth:'none' },
+    { id:'nlcd',         name:'NLCD Land Cover',          type:'land',          status:'active',       feeds:1, cost:'free', auth:'none' },
+    { id:'epa_attains',  name:'EPA ATTAINS Impaired Waters', type:'regulatory', status:'active',      feeds:1, cost:'free', auth:'none' },
+    { id:'usace_orm',    name:'USACE Regulatory ORM',    type:'regulatory',    status:'active',       feeds:1, cost:'free', auth:'none' },
+
+    { id:'epa_aqs',      name:'EPA AQS Official Monitors',type:'air_quality', status:aqsCreds ? 'active' : 'key_required', feeds:1, cost:'free', auth:'AQS_EMAIL+AQS_API_KEY' },
+    { id:'openaq',       name:'OpenAQ Global Aggregator', type:'air_quality',  status:'active',       feeds:1, cost:'free', auth:'none' },
+    { id:'purpleair',    name:'PurpleAir PM2.5 Network',  type:'air_quality',  status:purpleKey ? 'active' : 'key_required', feeds:1, cost:'free', auth:'PURPLEAIR_API_KEY' },
+
     { id:'anthropic',    name:'Claude AI Assistant',    type:'ai',            status:anthropicKey ? 'active' : 'key_required', feeds:1, cost:'paid', auth:'ANTHROPIC_API_KEY' },
     { id:'edna_sampler', name:'eDNA Auto-Samplers',     type:'biological',    status:'planned_month6',feeds:1, cost:'hardware',  auth:'none',      worldFirst:true },
     { id:'hydrophone',   name:'Passive Acoustic Monitor',type:'acoustic',     status:'planned_month4',feeds:1, cost:'hardware',  auth:'none' },
     { id:'lora_soil',    name:'LoRaWAN Soil Conductivity',type:'groundwater', status:'planned_month3',feeds:15,cost:'hardware',  auth:'none' },
     { id:'ms4_iot',      name:'MS4 Stormwater IoT',    type:'stormwater',    status:'planned_month4',feeds:30, cost:'partnership',auth:'none' },
     { id:'wbe_mawss',    name:'Wastewater Epid. (WBE)', type:'public_health', status:'planned_year2', feeds:1, cost:'partnership',auth:'none', worldFirst:true },
-    { id:'ameriflux',    name:'AmeriFlux Flux Towers',  type:'carbon',        status:'planned_year2', feeds:1, cost:'partnership',auth:'none', worldFirst:true },
     { id:'osprey',       name:'Osprey (Litter Gitter)', type:'microplastic',  status:'partnership',   feeds:1, cost:'partnership',auth:'none', worldFirst:true },
     { id:'vexcel',       name:'Vexcel Data Program',    type:'aerial_imagery',status:vexcelKey ? 'active' : 'evaluation', feeds:7, cost:'paid_800mo', auth:'VEXCEL_API_KEY' },
   ]
@@ -51,13 +91,19 @@ router.get('/registry', (req,res) => {
     sensors: registry,
     summary:{ total:registry.length, active:active.length, keyRequired:keyed.length, planned:planned.length, worldFirsts:registry.filter(s=>s.worldFirst).length, totalActiveFeeds:active.reduce((a,s)=>a+(s.feeds||0),0) },
     envRequired:[
-      { key:'NASA_EARTHDATA_USER', desc:'NASA PACE OCI + TROPOMI backup', register:'urs.earthdata.nasa.gov', required:false },
-      { key:'NASA_EARTHDATA_PASS', desc:'NASA Earthdata password',         register:'urs.earthdata.nasa.gov', required:false },
-      { key:'COPERNICUS_USER',     desc:'Sentinel-5P TROPOMI methane',     register:'dataspace.copernicus.eu', required:false },
-      { key:'COPERNICUS_PASS',     desc:'Copernicus password',             register:'dataspace.copernicus.eu', required:false },
-      { key:'AIRNOW_API_KEY',      desc:'Real-time air quality index',     register:'airnowapi.org',           required:false },
-      { key:'ANTHROPIC_API_KEY',   desc:'AI Field Assistant (Claude)',     register:'console.anthropic.com',   required:false },
-      { key:'VEXCEL_API_KEY',      desc:'7.5cm aerial imagery + DTM',     register:'vexceldata.com/contact',  required:false },
+      { key:'NASA_EARTHDATA_USER', desc:'NASA PACE OCI + MODIS + VIIRS + HLS + Landsat', register:'urs.earthdata.nasa.gov', required:false },
+      { key:'NASA_EARTHDATA_PASS', desc:'NASA Earthdata password',                        register:'urs.earthdata.nasa.gov', required:false },
+      { key:'COPERNICUS_USER',     desc:'Sentinel-2 + TROPOMI + CMEMS ocean',             register:'dataspace.copernicus.eu', required:false },
+      { key:'COPERNICUS_PASS',     desc:'Copernicus password',                             register:'dataspace.copernicus.eu', required:false },
+      { key:'AIRNOW_API_KEY',      desc:'Real-time air quality index',                     register:'airnowapi.org',           required:false },
+      { key:'EBIRD_API_KEY',       desc:'eBird Cornell Lab bird observations',             register:'ebird.org/api/keygen',    required:false },
+      { key:'AQS_EMAIL',           desc:'EPA AQS official monitor data (email)',            register:'aqs.epa.gov/data/api/signup', required:false },
+      { key:'AQS_API_KEY',         desc:'EPA AQS official monitor data (key)',              register:'aqs.epa.gov/data/api/signup', required:false },
+      { key:'NCEI_API_KEY',        desc:'NOAA NCEI historical climate archive',             register:'ncdc.noaa.gov/cdo-web/token', required:false },
+      { key:'PURPLEAIR_API_KEY',   desc:'PurpleAir hyperlocal PM2.5 network',              register:'develop.purpleair.com',        required:false },
+      { key:'AMERIFLUX_TOKEN',     desc:'AmeriFlux CO₂/CH₄ flux tower data',              register:'ameriflux.lbl.gov/data/register-data-usage', required:false },
+      { key:'ANTHROPIC_API_KEY',   desc:'AI Field Assistant (Claude)',                     register:'console.anthropic.com',   required:false },
+      { key:'VEXCEL_API_KEY',      desc:'7.5cm aerial imagery + DTM',                     register:'vexceldata.com/contact',  required:false },
     ],
     timestamp:new Date().toISOString(),
   })
@@ -114,6 +160,83 @@ router.get('/openeo/evi', async (req, res) => {
 
 router.get('/openeo/msi', async (req, res) => {
   try { const m = await getOpenEO(); res.json(await m.getMSI(parseInt(req.query.days) || 10)) }
+  catch (err) { res.status(500).json({ error: err.message }) }
+})
+
+let satelliteMod = null, oceanMod = null, ecologyMod = null, landMod = null, airplusMod = null
+const getSatellite = async () => { if (!satelliteMod) satelliteMod = await import('../services/satellite.js'); return satelliteMod }
+const getOcean     = async () => { if (!oceanMod) oceanMod = await import('../services/ocean.js'); return oceanMod }
+const getEcology   = async () => { if (!ecologyMod) ecologyMod = await import('../services/ecology.js'); return ecologyMod }
+const getLand      = async () => { if (!landMod) landMod = await import('../services/landregweather.js'); return landMod }
+const getAirPlus   = async () => { if (!airplusMod) airplusMod = await import('../services/airplus.js'); return airplusMod }
+
+router.get('/satellite/status', async (req, res) => {
+  try { const m = await getSatellite(); res.json(await m.getAllSatelliteStatus()) }
+  catch (err) { res.status(500).json({ error: err.message }) }
+})
+
+router.get('/ocean/status', async (req, res) => {
+  try { const m = await getOcean(); res.json(await m.getAllOceanStatus()) }
+  catch (err) { res.status(500).json({ error: err.message }) }
+})
+
+router.get('/ecology/status', async (req, res) => {
+  try { const m = await getEcology(); res.json(await m.getAllEcologyStatus()) }
+  catch (err) { res.status(500).json({ error: err.message }) }
+})
+
+router.get('/ecology/inaturalist', async (req, res) => {
+  try { const m = await getEcology(); res.json(await m.getInaturalistObservations(req.query.taxon || null, parseInt(req.query.days) || 30)) }
+  catch (err) { res.status(500).json({ error: err.message }) }
+})
+
+router.get('/ecology/gbif', async (req, res) => {
+  try { const m = await getEcology(); res.json(await m.getGBIFOccurrences(req.query.species || null, parseInt(req.query.days) || 365)) }
+  catch (err) { res.status(500).json({ error: err.message }) }
+})
+
+router.get('/ecology/ebird', async (req, res) => {
+  try { const m = await getEcology(); res.json(await m.getEBirdRecentObservations(req.query.region || 'US-AL', parseInt(req.query.days) || 7)) }
+  catch (err) { res.status(500).json({ error: err.message }) }
+})
+
+router.get('/land/status', async (req, res) => {
+  try { const m = await getLand(); res.json(await m.getAllLandRegWeatherStatus()) }
+  catch (err) { res.status(500).json({ error: err.message }) }
+})
+
+router.get('/land/weather', async (req, res) => {
+  try { const m = await getLand(); res.json(await m.getOpenMeteoWeather(parseFloat(req.query.lat) || 30.5, parseFloat(req.query.lon) || -88.0)) }
+  catch (err) { res.status(500).json({ error: err.message }) }
+})
+
+router.get('/land/flood', async (req, res) => {
+  try { const m = await getLand(); res.json(await m.getFEMAFloodZone(parseFloat(req.query.lat) || 30.5, parseFloat(req.query.lon) || -88.0)) }
+  catch (err) { res.status(500).json({ error: err.message }) }
+})
+
+router.get('/land/wetlands', async (req, res) => {
+  try { const m = await getLand(); res.json(await m.getNWIWetlands(parseFloat(req.query.lat) || 30.5, parseFloat(req.query.lon) || -88.0)) }
+  catch (err) { res.status(500).json({ error: err.message }) }
+})
+
+router.get('/land/attains', async (req, res) => {
+  try { const m = await getLand(); res.json(await m.getATTAINSWaterbodies(req.query.huc || '03160203')) }
+  catch (err) { res.status(500).json({ error: err.message }) }
+})
+
+router.get('/airplus/status', async (req, res) => {
+  try { const m = await getAirPlus(); res.json(await m.getAllAirQualityStatus()) }
+  catch (err) { res.status(500).json({ error: err.message }) }
+})
+
+router.get('/airplus/openaq', async (req, res) => {
+  try { const m = await getAirPlus(); res.json(await m.getOpenAQReadings(parseFloat(req.query.lat) || 30.5, parseFloat(req.query.lon) || -88.0)) }
+  catch (err) { res.status(500).json({ error: err.message }) }
+})
+
+router.get('/airplus/purpleair', async (req, res) => {
+  try { const m = await getAirPlus(); res.json(await m.getPurpleAirReadings()) }
   catch (err) { res.status(500).json({ error: err.message }) }
 })
 
