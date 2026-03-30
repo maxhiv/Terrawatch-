@@ -8,37 +8,48 @@ import axios from 'axios'
 
 const router = express.Router()
 
-const SENSOR_REGISTRY = [
-  { id:'usgs_nwis',    name:'USGS NWIS',               type:'water_quality', status:'active',       feeds:22, cost:'free',      auth:'none' },
-  { id:'noaa_coops',   name:'NOAA CO-OPS',             type:'tidal',         status:'active',       feeds:4,  cost:'free',      auth:'none' },
-  { id:'noaa_nws',     name:'NOAA NWS',                type:'weather',       status:'active',       feeds:1,  cost:'free',      auth:'none' },
-  { id:'noaa_ndbc',    name:'NOAA NDBC Buoys',         type:'offshore',      status:'active',       feeds:1,  cost:'free',      auth:'none' },
-  { id:'noaa_hf_radar',name:'NOAA HF Radar (CoSMO)',   type:'currents',      status:'active',       feeds:1,  cost:'free',      auth:'none',      worldFirst:true },
-  { id:'nerrs_cdmo',   name:'NERRS CDMO — Weeks Bay',  type:'estuarine',     status:'active',       feeds:12, cost:'free',      auth:'none' },
-  { id:'epa_echo',     name:'EPA ECHO',                type:'compliance',    status:'active',       feeds:1,  cost:'free',      auth:'none' },
-  { id:'wqp',          name:'Water Quality Portal',    type:'water_quality', status:'active',       feeds:1,  cost:'free',      auth:'none' },
-  { id:'epa_tri',      name:'EPA Toxic Release Inv.',  type:'pollution',     status:'active',       feeds:1,  cost:'free',      auth:'none' },
-  { id:'nasa_pace',    name:'NASA PACE OCI',           type:'satellite',     status:'key_required', feeds:3,  cost:'free',      auth:'NASA_EARTHDATA_USER+PASS', worldFirst:true },
-  { id:'tropomi_ch4',  name:'Sentinel-5P TROPOMI CH4',type:'atmospheric',   status:'key_required', feeds:1,  cost:'free',      auth:'COPERNICUS_USER+PASS or NASA creds' },
-  { id:'airnow',       name:'AirNow API',             type:'air_quality',   status:'key_required', feeds:1,  cost:'free',      auth:'AIRNOW_API_KEY' },
-  { id:'anthropic',    name:'Claude AI Assistant',    type:'ai',            status:'active',       feeds:1,  cost:'paid',      auth:'ANTHROPIC_API_KEY' },
-  { id:'edna_sampler', name:'eDNA Auto-Samplers',     type:'biological',    status:'planned_month6',feeds:1, cost:'hardware',  auth:'none',      worldFirst:true },
-  { id:'hydrophone',   name:'Passive Acoustic Monitor',type:'acoustic',     status:'planned_month4',feeds:1, cost:'hardware',  auth:'none' },
-  { id:'lora_soil',    name:'LoRaWAN Soil Conductivity',type:'groundwater', status:'planned_month3',feeds:15,cost:'hardware',  auth:'none' },
-  { id:'ms4_iot',      name:'MS4 Stormwater IoT',    type:'stormwater',    status:'planned_month4',feeds:30, cost:'partnership',auth:'none' },
-  { id:'wbe_mawss',    name:'Wastewater Epid. (WBE)', type:'public_health', status:'planned_year2', feeds:1, cost:'partnership',auth:'none', worldFirst:true },
-  { id:'ameriflux',    name:'AmeriFlux Flux Towers',  type:'carbon',        status:'planned_year2', feeds:1, cost:'partnership',auth:'none', worldFirst:true },
-  { id:'osprey',       name:'Osprey (Litter Gitter)', type:'microplastic',  status:'partnership',   feeds:1, cost:'partnership',auth:'none', worldFirst:true },
-  { id:'vexcel',       name:'Vexcel Data Program',    type:'aerial_imagery',status:'evaluation',    feeds:7, cost:'paid_800mo', auth:'VEXCEL_API_KEY' },
-]
+function hasEnv(...keys) { return keys.every(k => !!process.env[k]) }
+
+function buildSensorRegistry() {
+  const nasaCreds = hasEnv('NASA_EARTHDATA_USER','NASA_EARTHDATA_PASS')
+  const copCreds  = hasEnv('COPERNICUS_USER','COPERNICUS_PASS')
+  const airnowKey = hasEnv('AIRNOW_API_KEY')
+  const anthropicKey = hasEnv('ANTHROPIC_API_KEY')
+  const vexcelKey = hasEnv('VEXCEL_API_KEY')
+
+  return [
+    { id:'usgs_nwis',    name:'USGS NWIS',               type:'water_quality', status:'active',       feeds:22, cost:'free',      auth:'none' },
+    { id:'noaa_coops',   name:'NOAA CO-OPS',             type:'tidal',         status:'active',       feeds:4,  cost:'free',      auth:'none' },
+    { id:'noaa_nws',     name:'NOAA NWS',                type:'weather',       status:'active',       feeds:1,  cost:'free',      auth:'none' },
+    { id:'noaa_ndbc',    name:'NOAA NDBC Buoys',         type:'offshore',      status:'active',       feeds:1,  cost:'free',      auth:'none' },
+    { id:'noaa_hf_radar',name:'NOAA HF Radar (CoSMO)',   type:'currents',      status:'active',       feeds:1,  cost:'free',      auth:'none',      worldFirst:true },
+    { id:'nerrs_cdmo',   name:'NERRS CDMO — Weeks Bay',  type:'estuarine',     status:'active',       feeds:12, cost:'free',      auth:'none' },
+    { id:'epa_echo',     name:'EPA ECHO',                type:'compliance',    status:'active',       feeds:1,  cost:'free',      auth:'none' },
+    { id:'wqp',          name:'Water Quality Portal',    type:'water_quality', status:'active',       feeds:1,  cost:'free',      auth:'none' },
+    { id:'epa_tri',      name:'EPA Toxic Release Inv.',  type:'pollution',     status:'active',       feeds:1,  cost:'free',      auth:'none' },
+    { id:'nasa_pace',    name:'NASA PACE OCI',           type:'satellite',     status:nasaCreds ? 'active' : 'key_required', feeds:3,  cost:'free', auth:'NASA_EARTHDATA_USER+PASS', worldFirst:true },
+    { id:'tropomi_ch4',  name:'Sentinel-5P TROPOMI CH4',type:'atmospheric',   status:(copCreds || nasaCreds) ? 'active' : 'key_required', feeds:1, cost:'free', auth:'COPERNICUS_USER+PASS or NASA creds' },
+    { id:'airnow',       name:'AirNow API',             type:'air_quality',   status:airnowKey ? 'active' : 'key_required', feeds:1, cost:'free', auth:'AIRNOW_API_KEY' },
+    { id:'anthropic',    name:'Claude AI Assistant',    type:'ai',            status:anthropicKey ? 'active' : 'key_required', feeds:1, cost:'paid', auth:'ANTHROPIC_API_KEY' },
+    { id:'edna_sampler', name:'eDNA Auto-Samplers',     type:'biological',    status:'planned_month6',feeds:1, cost:'hardware',  auth:'none',      worldFirst:true },
+    { id:'hydrophone',   name:'Passive Acoustic Monitor',type:'acoustic',     status:'planned_month4',feeds:1, cost:'hardware',  auth:'none' },
+    { id:'lora_soil',    name:'LoRaWAN Soil Conductivity',type:'groundwater', status:'planned_month3',feeds:15,cost:'hardware',  auth:'none' },
+    { id:'ms4_iot',      name:'MS4 Stormwater IoT',    type:'stormwater',    status:'planned_month4',feeds:30, cost:'partnership',auth:'none' },
+    { id:'wbe_mawss',    name:'Wastewater Epid. (WBE)', type:'public_health', status:'planned_year2', feeds:1, cost:'partnership',auth:'none', worldFirst:true },
+    { id:'ameriflux',    name:'AmeriFlux Flux Towers',  type:'carbon',        status:'planned_year2', feeds:1, cost:'partnership',auth:'none', worldFirst:true },
+    { id:'osprey',       name:'Osprey (Litter Gitter)', type:'microplastic',  status:'partnership',   feeds:1, cost:'partnership',auth:'none', worldFirst:true },
+    { id:'vexcel',       name:'Vexcel Data Program',    type:'aerial_imagery',status:vexcelKey ? 'active' : 'evaluation', feeds:7, cost:'paid_800mo', auth:'VEXCEL_API_KEY' },
+  ]
+}
 
 router.get('/registry', (req,res) => {
-  const active  = SENSOR_REGISTRY.filter(s=>s.status==='active')
-  const keyed   = SENSOR_REGISTRY.filter(s=>s.status==='key_required')
-  const planned = SENSOR_REGISTRY.filter(s=>s.status.startsWith('planned'))
+  const registry = buildSensorRegistry()
+  const active  = registry.filter(s=>s.status==='active')
+  const keyed   = registry.filter(s=>s.status==='key_required')
+  const planned = registry.filter(s=>s.status.startsWith('planned'))
   res.json({
-    sensors: SENSOR_REGISTRY,
-    summary:{ total:SENSOR_REGISTRY.length, active:active.length, keyRequired:keyed.length, planned:planned.length, worldFirsts:SENSOR_REGISTRY.filter(s=>s.worldFirst).length, totalActiveFeeds:active.reduce((a,s)=>a+(s.feeds||0),0) },
+    sensors: registry,
+    summary:{ total:registry.length, active:active.length, keyRequired:keyed.length, planned:planned.length, worldFirsts:registry.filter(s=>s.worldFirst).length, totalActiveFeeds:active.reduce((a,s)=>a+(s.feeds||0),0) },
     envRequired:[
       { key:'NASA_EARTHDATA_USER', desc:'NASA PACE OCI + TROPOMI backup', register:'urs.earthdata.nasa.gov', required:false },
       { key:'NASA_EARTHDATA_PASS', desc:'NASA Earthdata password',         register:'urs.earthdata.nasa.gov', required:false },
