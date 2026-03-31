@@ -1,4 +1,5 @@
 import axios from 'axios'
+import { getAllGOESStatus } from './goes.js'
 
 const CMR_BASE   = 'https://cmr.earthdata.nasa.gov/search'
 const CDSE_BASE  = 'https://catalogue.dataspace.copernicus.eu/odata/v1'
@@ -279,9 +280,6 @@ export async function getCopernicusDEMStatus() {
 }
 
 export async function getAllSatelliteStatus() {
-  let goesModule
-  try { goesModule = await import('./goes.js') } catch(e) { goesModule = null }
-
   const [modis, viirs, hls, landsat, s2, dem, goes] = await Promise.allSettled([
     getMODISChlorophyll(3),
     getVIIRSOceanColor(3),
@@ -289,7 +287,7 @@ export async function getAllSatelliteStatus() {
     getLandsatGranules(16),
     getSentinel2Granules(7),
     getCopernicusDEMStatus(),
-    goesModule ? goesModule.getAllGOESStatus() : Promise.resolve({ status: { available: false }, imagery: { available: false } }),
+    getAllGOESStatus(),
   ])
 
   return {
