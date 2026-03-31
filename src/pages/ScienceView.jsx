@@ -16,6 +16,7 @@ const PARAMS = {
   do_mg_l:           { label:'DO₂',         unit:'mg/L', color:'#10b981', critLow:3, warnLow:5  },
   water_temp_c:      { label:'Temperature',  unit:'°C',   color:'#f59e0b', critHigh:30 },
   streamflow_cfs:    { label:'Streamflow',   unit:'cfs',  color:'#3b82f6' },
+  gage_height_ft:    { label:'Gage Height',  unit:'ft',   color:'#0ea5e9' },
   pH:                { label:'pH',           unit:'',     color:'#7c3aed', warnLow:6.5, warnHigh:8.5 },
   turbidity_ntu:     { label:'Turbidity',    unit:'NTU',  color:'#d97706', warnHigh:10, critHigh:25 },
   conductance_us_cm: { label:'Conductance',  unit:'µS/cm',color:'#1d6fcc' },
@@ -140,9 +141,15 @@ export default function ScienceView() {
 
   const allDO = [...usgs.map(s=>safeNum(s.readings?.do_mg_l)).filter(v=>v!=null), ...(nDO!=null?[nDO]:[])]
   const allTemp = [...usgs.map(s=>safeNum(s.readings?.water_temp_c)).filter(v=>v!=null), ...(nTemp!=null?[nTemp]:[])]
+  const allFlow = usgs.map(s=>safeNum(s.readings?.streamflow_cfs)).filter(v=>v!=null)
+  const totalFlow = allFlow.length ? allFlow.reduce((a,b)=>a+b,0) : null
   const minDO = allDO.length ? Math.min(...allDO) : null
   const avgDO = allDO.length ? allDO.reduce((a,b)=>a+b,0)/allDO.length : null
   const maxDO = allDO.length ? Math.max(...allDO) : null
+  const coopsArr = Object.values(coops)
+  const coopsWL = coopsArr.map(s=>safeNum(s.water_level)).filter(v=>v!=null)
+  const coopsTemp = coopsArr.map(s=>safeNum(s.water_temperature)).filter(v=>v!=null)
+  const coopsSal = coopsArr.map(s=>safeNum(s.salinity)).filter(v=>v!=null)
 
   const goesSst = safeNum(goesStatus?.status?.latestSST_C)
   const goesImagery = goesStatus?.imagery?.available || goesStatus?.status?.imageryAvailable
@@ -238,7 +245,7 @@ export default function ScienceView() {
       Object.entries(s.readings||{}).forEach(([param,reading])=>{
         const v = safeNum(reading)
         const meta = PARAMS[param]
-        if(v!=null) rows.push(['USGS', s.name, meta?.label||param, v, meta?.unit||'', s.timestamp||''])
+        if(v!=null) rows.push(['USGS', s.name, meta?.label||param, v, meta?.unit||(reading?.unit)||'', s.timestamp||(reading?.dateTime)||''])
       })
     })
     if (nerrsOk && nerrs?.waterQuality?.latest) {
@@ -264,6 +271,10 @@ export default function ScienceView() {
     })
     if (omCape != null) rows.push(['Open-Meteo', 'Mobile Bay', 'CAPE', omCape, 'J/kg', ''])
     if (omWind != null) rows.push(['Open-Meteo', 'Mobile Bay', 'Wind Speed', omWind, openMeteo?.current?.wind_ms != null ? 'm/s' : 'mph', ''])
+    if (goesImagery) rows.push(['GOES-19', 'Gulf of Mexico', 'Imagery', 'Active', '', ''])
+    if (ebirdSpecies != null) rows.push(['eBird', 'Mobile Bay', 'Species Count', ebirdSpecies, '', ''])
+    if (hycomActive) rows.push(['HYCOM', 'Gulf of Mexico', 'Ocean Model', 'Active', '', ''])
+    if (cmemsActive) rows.push(['CMEMS', 'Gulf of Mexico', 'Marine Service', 'Active', '', ''])
 
     const csv = rows.map(r=>r.join(',')).join('\n')
     const blob = new Blob([csv],{type:'text/csv'})
@@ -294,17 +305,20 @@ export default function ScienceView() {
         }
       />
 
-      <div className="grid grid-cols-3 md:grid-cols-7 gap-2 mb-5">
-        <div className="tw-card flex flex-col items-center py-3 col-span-1">
-          <DoGauge value={minDO} />
-          <div className="text-[9px] text-bay-400 mt-1">Network Min (incl. NERRS)</div>
-        </div>
-        <StatBox label="Network Avg DO₂" value={avgDO?.toFixed(1)} unit="mg/L" color={doColor(avgDO)} sub={`${allDO.length} sources`} />
-        <StatBox label="NERRS DO₂" value={nDO?.toFixed(1)} unit="mg/L" color={doColor(nDO)} sub="Weeks Bay" />
+      <div className="grid grid-cols-3 md:grid-cols-9 gap-2 mb-5">
+        <StatBox label="Total Streamflow" value={totalFlow != null ? (totalFlow/1000).toFixed(1) : null} unit="K cfs" color="#3b82f6" sub={`${allFlow.length} USGS stations`} />
+        <StatBox label="CO-OPS Tide" value={coopsWL.length ? coopsWL[0].toFixed(2) : null} unit="ft MLLW" color="#1d6fcc" sub={`${coopsArr.length} tidal stations`} />
         <StatBox label="GOES-19 SST" value={goesSst?.toFixed(1) || (goesImagery ? 'Imagery' : null)} unit={goesSst != null ? '°C' : ''} color="#1d6fcc" sub={goesSst != null ? 'Gulf hourly' : goesImagery ? 'SST offline · Imagery active' : 'Gulf hourly'} />
         <StatBox label="Air Quality" value={aqiVal ?? (purpleAirAvg != null ? purpleAirAvg.toFixed(0) : null)} unit={aqiVal != null ? 'AQI' : purpleAirAvg != null ? 'PM2.5' : 'AQI'} color={aqiVal!=null&&aqiVal>100?'#dc2626':'#10b981'} sub={aqiCat || (purpleAirAvg != null ? `PurpleAir ${purpleAirSensors.length} sensors` : 'AirNow')} />
-        <StatBox label="Avg Water Temp" value={allTemp.length?(allTemp.reduce((a,b)=>a+b,0)/allTemp.length).toFixed(1):omTemp?.toFixed(1)} unit="°C" color="#f59e0b" sub={allTemp.length?`${allTemp.length} sources`:'Open-Meteo'} />
-        <StatBox label="HAB Probability" value={habAssessment?.hab?.probability} unit="%" color={habAssessment?.hab?.probability>=65?'#dc2626':'#0a9e80'}
+        <StatBox label="PurpleAir PM2.5" value={purpleAirAvg?.toFixed(1)} unit="µg/m³" color={purpleAirAvg != null && purpleAirAvg > 12 ? '#dc2626' : '#3b82f6'} sub={`${purpleAirSensors.length} local sensors`} />
+        <StatBox label="Water Temp" value={allTemp.length?(allTemp.reduce((a,b)=>a+b,0)/allTemp.length).toFixed(1):coopsTemp.length?((coopsTemp.reduce((a,b)=>a+b,0)/coopsTemp.length-32)*5/9).toFixed(1):omTemp?.toFixed(1)} unit="°C" color="#f59e0b" sub={allTemp.length?`${allTemp.length} USGS`:coopsTemp.length?`${coopsTemp.length} CO-OPS`:'Open-Meteo'} />
+        <StatBox label="Wind" value={omWind?.toFixed(1)} unit={openMeteo?.current?.wind_ms != null ? "m/s" : "mph"} color="#3b82f6" sub={`Dir: ${safeNum(openMeteo?.current?.wind_dir) ?? '—'}°`} />
+        {allDO.length > 0 ? (
+          <StatBox label="Min DO₂" value={minDO?.toFixed(1)} unit="mg/L" color={doColor(minDO)} sub={`${allDO.length} sources`} />
+        ) : (
+          <StatBox label="CAPE" value={omCape?.toFixed(0)} unit="J/kg" color={omCape!=null&&omCape>1000?'#dc2626':'#7c3aed'} sub="Convective" />
+        )}
+        <StatBox label="HAB Risk" value={habAssessment?.hab?.probability} unit="%" color={habAssessment?.hab?.probability>=65?'#dc2626':'#0a9e80'}
           sub={habAssessment?.hab?.riskLevel?<RiskBadge level={habAssessment.hab.riskLevel}/>:null} />
       </div>
 
@@ -356,32 +370,40 @@ export default function ScienceView() {
               const do2=safeNum(s.readings?.do_mg_l)
               const temp=safeNum(s.readings?.water_temp_c)
               const flow=safeNum(s.readings?.streamflow_cfs)
+              const gage=safeNum(s.readings?.gage_height_ft)
               const pH=safeNum(s.readings?.pH)
               const turb=safeNum(s.readings?.turbidity_ntu)
               const cond=safeNum(s.readings?.conductance_us_cm)
               const alert=do2!=null&&do2<4
+              const availableParams = [
+                do2!=null&&{l:'DO₂',v:do2.toFixed(2),u:'mg/L',c:doColor(do2),alert:do2<4},
+                temp!=null&&{l:'Temp',v:temp.toFixed(1),u:'°C',c:'#f59e0b'},
+                flow!=null&&{l:'Flow',v:(flow/1000).toFixed(1),u:'K cfs',c:'#3b82f6'},
+                gage!=null&&{l:'Stage',v:gage.toFixed(2),u:'ft',c:'#0ea5e9'},
+                pH!=null&&{l:'pH',v:pH.toFixed(2),u:'',c:'#7c3aed'},
+                turb!=null&&{l:'Turbidity',v:turb.toFixed(1),u:'NTU',c:'#d97706'},
+                cond!=null&&{l:'Conductance',v:cond.toFixed(0),u:'µS/cm',c:'#1d6fcc'},
+              ].filter(Boolean)
+              const hasData = availableParams.length > 0
               return (
                 <div key={s.siteNo} className={clsx('tw-card',alert&&'border-red-200')} style={alert?{background:'#fef2f2'}:{}}>
                   <div className="flex items-center gap-2 mb-3">
-                    <div className={clsx('w-2.5 h-2.5 rounded-full flex-shrink-0',alert?'bg-red-500 animate-pulse':flow!=null||do2!=null||temp!=null?'bg-emerald-500':'bg-amber-400')}/>
+                    <div className={clsx('w-2.5 h-2.5 rounded-full flex-shrink-0',alert?'bg-red-500 animate-pulse':hasData?'bg-emerald-500':'bg-amber-400')}/>
                     <div className="font-bold text-sm text-bay-800 flex-1">{s.name}</div>
                     <div className="tw-mono text-[9px] text-bay-300">{s.siteNo}</div>
                   </div>
-                  <div className="grid grid-cols-3 gap-2">
-                    {[
-                      {l:'DO₂',v:do2?.toFixed(2),u:'mg/L',c:doColor(do2),alert:do2!=null&&do2<4},
-                      {l:'Temp',v:temp?.toFixed(1),u:'°C',c:'#f59e0b'},
-                      {l:'Flow',v:flow?(flow/1000).toFixed(1):null,u:'K cfs',c:'#3b82f6'},
-                      {l:'pH',v:pH?.toFixed(2),u:'',c:'#7c3aed'},
-                      {l:'Turbidity',v:turb?.toFixed(1),u:'NTU',c:'#d97706'},
-                      {l:'Conductance',v:cond?cond.toFixed(0):null,u:'µS/cm',c:'#1d6fcc'},
-                    ].map(({l,v,u,c,alert:a})=>(
-                      <div key={l} className={clsx('rounded-lg p-2 text-center',a?'bg-red-50':'bg-bay-50')}>
-                        <div className="tw-label mb-0.5">{l}</div>
-                        <div className="tw-mono text-sm font-bold" style={{color:v?c:'#aed0c2'}}>{v||'—'}{v&&u&&<span className="text-[9px] font-normal text-bay-400 ml-0.5">{u}</span>}</div>
-                      </div>
-                    ))}
-                  </div>
+                  {hasData ? (
+                    <div className={clsx('grid gap-2', availableParams.length===1?'grid-cols-1':availableParams.length===2?'grid-cols-2':'grid-cols-3')}>
+                      {availableParams.map(({l,v,u,c,alert:a})=>(
+                        <div key={l} className={clsx('rounded-lg p-2 text-center',a?'bg-red-50':'bg-bay-50')}>
+                          <div className="tw-label mb-0.5">{l}</div>
+                          <div className="tw-mono text-sm font-bold" style={{color:c}}>{v}<span className="text-[9px] font-normal text-bay-400 ml-0.5">{u}</span></div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="text-xs text-bay-400 bg-bay-50 rounded-lg p-2 text-center">No current readings available</div>
+                  )}
                 </div>
               )
             })}
@@ -391,17 +413,32 @@ export default function ScienceView() {
           <SectionLabel title="NOAA CO-OPS Tidal Stations" badge={`${Object.keys(coops).length} stations`} />
           <div className="tw-card">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-              {Object.values(coops).map(s=>(
-                <div key={s.id} className="p-3 rounded-lg bg-bay-50">
-                  <div className="font-semibold text-sm text-bay-800 mb-2">{s.name}</div>
-                  {[{l:'Water Level',v:safeNum(s.water_level),u:'ft MLLW',c:'#1d6fcc'},{l:'Temp',v:safeNum(s.water_temperature),u:'°F',c:'#f59e0b'},{l:'Salinity',v:safeNum(s.salinity),u:'ppt',c:'#7c3aed'}].map(({l,v,u,c})=>(
-                    <div key={l} className="flex justify-between py-1 border-b border-bay-100 last:border-0">
-                      <span className="text-xs text-bay-400">{l}</span>
-                      <span className="tw-mono text-sm font-bold" style={{color:v!=null?c:'#aed0c2'}}>{v!=null?v.toFixed(2):'—'}<span className="text-[9px] font-normal text-bay-400 ml-1">{u}</span></span>
+              {Object.values(coops).map(s=>{
+                const params = [
+                  {l:'Water Level',v:safeNum(s.water_level),u:'ft MLLW',c:'#1d6fcc'},
+                  {l:'Temp',v:safeNum(s.water_temperature),u:'°F',c:'#f59e0b'},
+                  {l:'Salinity',v:safeNum(s.salinity),u:'ppt',c:'#7c3aed'},
+                  {l:'Air Temp',v:safeNum(s.air_temperature),u:'°F',c:'#f97316'},
+                  {l:'Wind',v:safeNum(s.wind_speed),u:'kts',c:'#3b82f6'},
+                  {l:'Pressure',v:safeNum(s.air_pressure),u:'mb',c:'#6366f1'},
+                ].filter(p=>p.v!=null)
+                return (
+                  <div key={s.id} className="p-3 rounded-lg bg-bay-50">
+                    <div className="flex items-center gap-2 mb-2">
+                      <div className={clsx('w-2 h-2 rounded-full flex-shrink-0', params.length > 0 ? 'bg-emerald-500' : 'bg-amber-400')} />
+                      <div className="font-semibold text-sm text-bay-800">{s.name}</div>
                     </div>
-                  ))}
-                </div>
-              ))}
+                    {params.length > 0 ? params.map(({l,v,u,c})=>(
+                      <div key={l} className="flex justify-between py-1 border-b border-bay-100 last:border-0">
+                        <span className="text-xs text-bay-400">{l}</span>
+                        <span className="tw-mono text-sm font-bold" style={{color:c}}>{v.toFixed(2)}<span className="text-[9px] font-normal text-bay-400 ml-1">{u}</span></span>
+                      </div>
+                    )) : (
+                      <div className="text-xs text-bay-400 text-center py-2">Station timeout — retrying</div>
+                    )}
+                  </div>
+                )
+              })}
             </div>
           </div>
 
@@ -429,11 +466,22 @@ export default function ScienceView() {
               <div className="text-[10px] text-bay-400 mt-1">{oceanStatus?.hycom?.product || '1/12° global model'}</div>
             </div>
           </div>
-          {(hycomActive || cmemsActive) && (
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+          {(hycomActive || cmemsActive || goesImagery) && (
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
               {cmemsActive && <StatBox label="CMEMS Copernicus" value="Active" color="#10b981" sub="Marine service" />}
               {hycomActive && <StatBox label="HYCOM 1/12°" value="Active" color="#10b981" sub="Global ocean model" />}
               {oceanStatus?.streamstats?.available && <StatBox label="USGS StreamStats" value="Active" color="#10b981" sub="Watershed delineation" />}
+              {goesImagery && <StatBox label="GOES-19 Imagery" value="Streaming" color="#10b981" sub="GEOCOLOR 5-min refresh" />}
+            </div>
+          )}
+          {goesImagery && goesStatus?.imagery?.imageUrl && (
+            <div className="tw-card">
+              <div className="flex items-center justify-between mb-2">
+                <div className="tw-label">GOES-19 GEOCOLOR — Gulf of Mexico (Live)</div>
+                <a href={goesStatus.imagery.animationUrl || goesStatus.imagery.imageUrl} target="_blank" rel="noopener noreferrer" className="text-[10px] text-teal-600 hover:underline">Open full size ↗</a>
+              </div>
+              <img src={goesStatus.imagery.imageUrl} alt="GOES-19 GEOCOLOR Gulf of Mexico" className="w-full rounded-lg border border-bay-100" style={{maxHeight:360,objectFit:'cover'}} />
+              <div className="text-[9px] text-bay-400 mt-2">NOAA STAR CDN · GEOCOLOR true-color composite · Auto-refreshes every 5 minutes</div>
             </div>
           )}
 
@@ -443,13 +491,13 @@ export default function ScienceView() {
             <StatBox label="Wind" value={omWind?.toFixed(1)} unit={openMeteo?.current?.wind_ms != null ? "m/s" : "mph"} color="#3b82f6" sub={`Dir: ${safeNum(openMeteo?.current?.wind_dir) ?? '—'}°`} />
             <StatBox label="CAPE" value={omCape?.toFixed(0)} unit="J/kg" color={omCape!=null&&omCape>1000?'#dc2626':'#7c3aed'} sub={omCape!=null&&omCape>1500?'Severe risk':omCape!=null&&omCape>500?'Moderate instability':'Convective potential'} />
             <StatBox label="AQI" value={aqiVal} unit="" color={aqiVal!=null&&aqiVal>100?'#dc2626':'#10b981'} sub={aqiCat || 'AirNow'} />
-            <StatBox label="PurpleAir PM2.5" value={purpleAirAvg?.toFixed(1) ?? safeNum(airplusStatus?.openAQ?.avgPM25)?.toFixed(1)} unit="µg/m³" color={purpleAirAvg != null && purpleAirAvg > 12 ? '#dc2626' : '#3b82f6'} sub={purpleAirSensors.length ? `${purpleAirSensors.length} local sensors` : 'Loading...'} />
+            <StatBox label="Precip" value={safeNum(openMeteo?.current?.precipitation_mm)?.toFixed(1) ?? safeNum(openMeteo?.current?.rain)?.toFixed(1)} unit="mm" color="#3b82f6" sub="Current hour" />
           </div>
           {purpleAirSensors.length > 0 && (
             <div className="tw-card">
-              <div className="tw-label mb-2">PurpleAir Hyperlocal PM2.5 — {purpleAirSensors.length} Sensors</div>
+              <div className="tw-label mb-2">PurpleAir Hyperlocal PM2.5 — {purpleAirSensors.length} Sensors · Avg {purpleAirAvg?.toFixed(1)} µg/m³</div>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-                {purpleAirSensors.slice(0, 8).map((s, i) => (
+                {purpleAirSensors.map((s, i) => (
                   <div key={i} className="rounded-lg p-2 bg-bay-50 text-center">
                     <div className="text-[10px] text-bay-500 truncate">{s.name}</div>
                     <div className="tw-mono text-sm font-bold" style={{color: s.pm25 > 12 ? '#dc2626' : s.pm25 > 6 ? '#f59e0b' : '#10b981'}}>{s.pm25?.toFixed(1)}<span className="text-[9px] font-normal text-bay-400 ml-0.5">µg/m³</span></div>
@@ -508,14 +556,24 @@ export default function ScienceView() {
 
           <SectionLabel title="Land, Regulatory & Watershed" badge={landStatus ? `${landStatus.totalSources || 0} sources` : 'LOADING'} />
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            <StatBox label="Open-Meteo" value={landStatus?.openMeteo?.available ? 'Active' : '—'} color={landStatus?.openMeteo?.available ? '#10b981' : '#aed0c2'} sub="7-day forecast" />
-            <StatBox label="FEMA FIRM" value={landStatus?.fema?.available ? (landStatus.fema.inFloodZone ? 'Flood Zone' : 'No Zone') : '—'} color={landStatus?.fema?.available ? (landStatus.fema.inFloodZone ? '#dc2626' : '#10b981') : '#aed0c2'} sub="Flood risk assessment" />
-            <StatBox label="EPA ATTAINS" value={landStatus?.attains?.available ? 'Active' : '—'} color={landStatus?.attains?.available ? '#10b981' : '#aed0c2'} sub={landStatus?.attains?.data?.items?.[0]?.assessmentUnitCount != null ? `${landStatus.attains.data.items[0].assessmentUnitCount} units` : 'Impaired waters'} />
-            <StatBox label="USACE ORM" value={landStatus?.usace?.available ? 'Active' : '—'} color={landStatus?.usace?.available ? '#10b981' : '#aed0c2'} sub="§404 permits" />
-            <StatBox label="NWI Wetlands" value={landStatus?.nwi?.available ? 'Active' : '—'} color={landStatus?.nwi?.available ? '#10b981' : '#aed0c2'} sub="USFWS inventory" />
-            <StatBox label="SSURGO Soils" value={landStatus?.ssurgo?.available ? 'Active' : '—'} color={landStatus?.ssurgo?.available ? '#10b981' : '#aed0c2'} sub="Hydric soils" />
-            <StatBox label="NLCD 2021" value={landStatus?.nlcd?.available ? 'Active' : '—'} color={landStatus?.nlcd?.available ? '#10b981' : '#aed0c2'} sub="Land cover" />
-            <StatBox label="AHPS Flood" value={landStatus?.ahps?.available ? 'Active' : '—'} color={landStatus?.ahps?.available ? '#3b82f6' : '#aed0c2'} sub="NOAA flood stage" />
+            {(() => {
+              const items = [
+                landStatus?.openMeteo?.available && {l:'Open-Meteo',v:'Active',c:'#10b981',s:'7-day forecast'},
+                landStatus?.fema?.available && {l:'FEMA FIRM',v:landStatus.fema.inFloodZone?'Flood Zone':'No Zone',c:landStatus.fema.inFloodZone?'#dc2626':'#10b981',s:'Flood risk assessment'},
+                landStatus?.attains?.available && {l:'EPA ATTAINS',v:'Active',c:'#10b981',s:landStatus?.attains?.data?.items?.[0]?.assessmentUnitCount!=null?`${landStatus.attains.data.items[0].assessmentUnitCount} units`:'Impaired waters'},
+                landStatus?.usace?.available && {l:'USACE ORM',v:'Active',c:'#10b981',s:'§404 permits'},
+                landStatus?.nwi?.available && {l:'NWI Wetlands',v:'Active',c:'#10b981',s:'USFWS inventory'},
+                landStatus?.ssurgo?.available && {l:'SSURGO Soils',v:'Active',c:'#10b981',s:'Hydric soils'},
+                landStatus?.nlcd?.available && {l:'NLCD 2021',v:'Active',c:'#10b981',s:'Land cover'},
+                landStatus?.ahps?.available && {l:'AHPS Flood',v:'Active',c:'#3b82f6',s:'NOAA flood stage'},
+                landStatus?.ncei?.available && {l:'NCEI Climate',v:'Active',c:'#10b981',s:'Climate normals'},
+              ].filter(Boolean)
+              return items.length > 0 ? items.map(({l,v,c,s})=>(
+                <StatBox key={l} label={l} value={v} color={c} sub={s} />
+              )) : (
+                <div className="col-span-4 tw-card text-center py-4 text-bay-400 text-sm">Loading land & regulatory sources...</div>
+              )
+            })()}
           </div>
         </div>
       )}

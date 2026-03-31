@@ -154,12 +154,13 @@ npm run build         # Vite production build
 
 ## Key Features
 
-- **Dashboard**: Real-time environmental conditions from 50 data sources
+- **Dashboard**: Real-time environmental conditions from 51+ data sources
 - **HAB Oracle**: Pre-bloom harmful algal bloom prediction (48-72h, World First™)
 - **Water Quality**: Interactive Leaflet map with NASA GIBS satellite overlays
 - **Feed Status**: Live status of all data feeds with health indicators
-- **Science View**: Multi-source data explorer (NERRS, USGS, CO-OPS, GOES, PurpleAir, ecology, satellites, ocean models, land/regulatory) with station compare, correlation, and CSV export
-- **Sensor Registry**: Complete registry of all 50 data feed integrations
+- **Science View**: Multi-source data explorer with dynamic station cards (only shows parameters with data — no empty dashes). NERRS (CDMO OFFLINE badge), USGS (flow + stage + DO₂ + temp), CO-OPS tidal, GOES-19 imagery (live GEOCOLOR), PurpleAir 13 sensors, ecology (eBird + iNaturalist + GBIF), satellites, ocean models (HYCOM + CMEMS), atmospheric (Open-Meteo wind/CAPE/precip + AQI), land/regulatory (FEMA + ATTAINS + NWI + SSURGO + NLCD + USACE). Station compare, correlation scatter (Temp vs DO₂), and comprehensive CSV export.
+- **Master Roadmap**: 16 tabs — Vision, Roadmap, Build Progress (51+ feeds, 25+ endpoints, 12 services, env vars, external API health), Intelligence Engine, Scientist Meeting, Hatch Strategy, BCEDA/SITEVAULT, Revenue Model, Opportunities, State Expansion, Private Sector, Osprey Integration, Data Sources, Airbus, Fox 10, Next Sensors.
+- **Sensor Registry**: Complete registry of all 51+ data feed integrations
 - **WetlandAI**: Wetland pre-delineation module
 - **SITEVAULT**: Site assessment data vault
 - **Alert Center**: Environmental alerts and notifications
