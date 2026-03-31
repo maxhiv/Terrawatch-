@@ -14,6 +14,7 @@ import sensorsRoutes from './routes/sensors.js'
 import aiRoutes from './routes/ai.js'
 import mlRoutes from './routes/mlArchitecture.js'
 import intelligenceRoutes from './routes/intelligence.js'
+import goes19Routes from './routes/goes19.js'
 
 import { getRealtimeData as getUSGSData } from './services/usgs.js'
 import { getAllCoopsConditions as getNOAAData } from './services/noaa.js'
@@ -43,6 +44,7 @@ app.use('/api/sensors', sensorsRoutes)
 app.use('/api/ai', aiRoutes)
 app.use('/api/ml', mlRoutes)
 app.use('/api/intelligence', intelligenceRoutes)
+app.use('/api/goes19', goes19Routes)
 
 app.get('/api/health', async (req, res) => {
   let dbStats = null

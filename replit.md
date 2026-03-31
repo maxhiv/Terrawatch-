@@ -152,6 +152,11 @@ npm run build         # Vite production build
 - `/api/sensors/goes/image` — GOES-19 latest imagery (sector/band params)
 - `/api/sensors/goes/all` — composite GOES status + imagery
 
+### GOES-19 Live Push Ingest (server/routes/goes19.js)
+- `POST /api/goes19/ingest` — Receives Jeff's 5-min GOES-19 pipeline (SST, QPE, cloud mask, RGB, GLM lightning, AMV winds). Auth: `x-api-key` header vs `GOES19_API_KEY` env var. Persists to `sensor_readings` table as source `GOES19-PUSH`.
+- `GET /api/goes19/latest` — Returns most recent scan payload
+- `GET /api/goes19/health` — Endpoint health/config status
+
 ## Key Features
 
 - **Dashboard**: Real-time environmental conditions from 51+ data sources

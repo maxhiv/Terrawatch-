@@ -10,6 +10,7 @@ channel = "stable-25_05"
 [userenv.shared]
 PORT = "3001"
 NODE_ENV = "development"
+GOES19_API_KEY = "c29a20f59c402cb15d052bc73a3010e7a76eb6449f3207f5c22fe805744d1e95"
 
 [workflows]
 runButton = "Project"
