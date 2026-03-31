@@ -60,7 +60,9 @@ export default function Dashboard() {
   const windDir = safeVal(weather?.current?.wind_direction)
   const salinity = safeVal(waterQuality?.coops?.['8735180']?.salinity?.value)
 
-  const goesSst = safeVal(goesStatus?.status?.latestSST_C)
+  const goesSst = safeVal(goesStatus?.status?.latestSST_C) ?? safeVal(goesStatus?.push?.sst_mean)
+  const goesSstSource = goesStatus?.status?.source === 'push' || (safeVal(goesStatus?.status?.latestSST_C) == null && safeVal(goesStatus?.push?.sst_mean) != null) ? 'push' : 'erddap'
+  const goesPush = goesStatus?.push
   const aqiVal = aqi?.readings?.[0]?.aqi
   const aqiCat = aqi?.readings?.[0]?.category
 
@@ -123,7 +125,7 @@ export default function Dashboard() {
 
       <Section title="Extended Monitoring">
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          <StatCard label="GOES-19 SST" value={goesSst != null ? goesSst.toFixed(1) : '—'} unit="°C" color="#d97706" icon="🛰️" sub="Gulf of Mexico · Hourly" freshness={lastFetchedAt.goes} />
+          <StatCard label="GOES-19 SST" value={goesSst != null ? goesSst.toFixed(1) : '—'} unit="°C" color="#d97706" icon="🛰️" sub={goesSst != null ? (goesSstSource === 'push' ? 'Push pipeline · 5-min' : 'Gulf of Mexico · Hourly') : 'Gulf of Mexico · Hourly'} freshness={lastFetchedAt.goes} />
           <StatCard label="Air Quality" value={aqiVal ?? '—'} unit="AQI" color={aqiVal > 100 ? '#dc2626' : aqiVal > 50 ? '#f59e0b' : '#10b981'} icon="🌬️" sub={aqiCat || 'AirNow'} alert={aqiVal > 100} freshness={lastFetchedAt.aqi} sparkData={(aqi?.readings || []).map(r => ({ v: r.aqi || 0 }))} sparkColor={aqiVal > 100 ? '#dc2626' : '#10b981'} />
           <StatCard label="Biodiversity" value={inatCount ?? '—'} unit="obs" color="#16a34a" icon="🦎" sub="iNaturalist 7-day" freshness={lastFetchedAt.sensors} />
           <StatCard label="Active Feeds" value={totalSensors || '—'} color="#0a9e80" icon="⊞" sub={`${sensors?.summary?.totalActiveFeeds || '—'} total feeds`} freshness={lastFetchedAt.sensors} />
@@ -175,13 +177,13 @@ export default function Dashboard() {
                 </div>
               </div>
             )}
-            {(goesStatus?.status?.available || goesStatus?.status?.imageryAvailable) && (
+            {(goesStatus?.status?.available || goesStatus?.status?.imageryAvailable || goesPush?.available) && (
               <div className="flex items-center gap-2">
                 <div className="w-2 h-2 rounded-full bg-orange-500 animate-pulse"/>
                 <div>
                   <div className="tw-label mb-0.5">GOES-19 SST</div>
                   <div className="tw-mono text-sm font-bold text-orange-700">
-                    {goesSst != null ? `${goesSst.toFixed(1)}°C` : 'Active'}
+                    {goesSst != null ? `${goesSst.toFixed(1)}°C` : goesPush?.available ? 'Push Active' : 'Active'}
                     <span className="text-bay-400 font-normal ml-2">Gulf of Mexico</span>
                   </div>
                 </div>

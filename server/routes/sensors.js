@@ -253,8 +253,43 @@ router.get('/goes/image', async (req, res) => {
 })
 
 router.get('/goes/all', async (req, res) => {
-  try { res.json(await getAllGOESStatus()) }
-  catch (err) { res.status(500).json({ error: err.message }) }
+  try {
+    const [goesResult, pushRes] = await Promise.allSettled([
+      getAllGOESStatus(),
+      fetch(`http://localhost:${process.env.PORT || 3001}/api/goes19/push-latest`).then(r => r.json()),
+    ])
+    const goes = goesResult.status === 'fulfilled' ? goesResult.value : { status: { available: false }, imagery: { available: false } }
+    const push = pushRes.status === 'fulfilled' ? pushRes.value : {}
+
+    const hasErddapSST = goes.status?.latestSST_C != null
+    const hasPushSST = push.sst_mean != null
+
+    if (!hasErddapSST && hasPushSST) {
+      goes.status = {
+        ...goes.status,
+        latestSST_C: push.sst_mean,
+        source: 'push',
+      }
+    }
+
+    goes.push = {
+      available: Object.keys(push).length > 0 && [push.sst_mean, push.sst_gradient, push.qpe_rainfall, push.cloud_coverage, push.glm_flashes, push.bloom_index, push.amv_wind_speed, push.turbidity_idx].some(v => v != null),
+      sst_mean: push.sst_mean ?? null,
+      sst_gradient: push.sst_gradient ?? null,
+      qpe_rainfall: push.qpe_rainfall ?? null,
+      qpe_6h: push.qpe_6h ?? null,
+      qpe_24h: push.qpe_24h ?? null,
+      cloud_coverage: push.cloud_coverage ?? null,
+      glm_flashes: push.glm_flashes ?? null,
+      glm_active: push.glm_active ?? null,
+      amv_wind_speed: push.amv_wind_speed ?? null,
+      amv_wind_dir: push.amv_wind_dir ?? null,
+      bloom_index: push.bloom_index ?? null,
+      turbidity_idx: push.turbidity_idx ?? null,
+    }
+
+    res.json(goes)
+  } catch (err) { res.status(500).json({ error: err.message }) }
 })
 
 export default router

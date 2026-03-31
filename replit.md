@@ -23,6 +23,13 @@ Planetary Environmental Intelligence Platform — Mobile Bay & Gulf Coast
 - **ML feature vector**: 95+ features from 15 live data sources per tick
 - **HAB Oracle v2**: 10-factor weighted ensemble (6 legacy + 4 GOES-19 factors: stratification, rainfall nutrient pulse, satellite bloom signal, GLM lightning mixing)
 
+## GOES-19 Dual-Track Architecture
+
+- **Push pipeline**: `routes/goes19.js` → SQLite DB → `getLatestGOESReadings()` → `_latestData.goesLatest` → ML model + frontend
+- **ERDDAP pull**: `services/goes.js` → CoastWatch ERDDAP (currently 404, fallback to push)
+- **Frontend merge**: `/api/sensors/goes/all` returns `status` (ERDDAP), `imagery` (CDN), and `push` (DB) fields; Dashboard/ScienceView use push SST as fallback with source-aware subtitles
+- **Push fields**: sst_mean, sst_gradient, qpe_rainfall, qpe_6h, qpe_24h, cloud_coverage, glm_flashes, glm_active, amv_wind_speed, amv_wind_dir, bloom_index, turbidity_idx
+
 ## Project Structure
 
 ```
@@ -58,7 +65,8 @@ terrawatch/
 │   │   ├── habOracle.js        # /api/hab/* (HAB assessment)
 │   │   ├── weather.js          # /api/weather/* (NWS forecast)
 │   │   ├── alerts.js           # /api/alerts (weather alerts)
-│   │   ├── sensors.js          # /api/sensors/* (registry + hfradar, nerrs, pace, methane, epa, openeo)
+│   │   ├── sensors.js          # /api/sensors/* (registry + hfradar, nerrs, pace, methane, epa, openeo, goes/all with push merge)
+│   │   ├── goes19.js           # /api/goes19/* (push pipeline ingest + push-latest endpoint)
 │   │   ├── ai.js               # /api/ai/* (Anthropic assistant)
 │   │   ├── intelligence.js     # /api/intelligence/* (DB stats, retrain, inference, vectors, events)
 │   │   └── mlArchitecture.js   # /api/ml/* (ML architecture status)

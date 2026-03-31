@@ -91,6 +91,10 @@ app.get('/api/health', async (req, res) => {
   })
 })
 
+app.get('/api/goes19/push-latest', (req, res) => {
+  res.json(_latestData.goesLatest || {})
+})
+
 const distPath = join(__dirname, '../dist')
 if (existsSync(join(distPath, 'index.html'))) {
   app.use(express.static(distPath))

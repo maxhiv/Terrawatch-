@@ -162,8 +162,24 @@ export default function ScienceView() {
   const coopsTemp = coopsArr.map(s=>safeNum(s.water_temperature)).filter(v=>v!=null)
   const coopsSal = coopsArr.map(s=>safeNum(s.salinity)).filter(v=>v!=null)
 
-  const goesSst = safeNum(goesStatus?.status?.latestSST_C)
+  const goesSst = safeNum(goesStatus?.status?.latestSST_C) ?? safeNum(goesStatus?.push?.sst_mean)
+  const goesSstSource = goesStatus?.status?.source === 'push' || (safeNum(goesStatus?.status?.latestSST_C) == null && safeNum(goesStatus?.push?.sst_mean) != null) ? 'push' : 'erddap'
   const goesImagery = goesStatus?.imagery?.available || goesStatus?.status?.imageryAvailable
+  const _goesPushRaw = goesStatus?.push
+  const goesPush = _goesPushRaw ? {
+    ..._goesPushRaw,
+    sst_mean: safeNum(_goesPushRaw.sst_mean),
+    sst_gradient: safeNum(_goesPushRaw.sst_gradient),
+    qpe_rainfall: safeNum(_goesPushRaw.qpe_rainfall),
+    qpe_6h: safeNum(_goesPushRaw.qpe_6h),
+    qpe_24h: safeNum(_goesPushRaw.qpe_24h),
+    cloud_coverage: safeNum(_goesPushRaw.cloud_coverage),
+    glm_flashes: safeNum(_goesPushRaw.glm_flashes),
+    bloom_index: safeNum(_goesPushRaw.bloom_index),
+    amv_wind_speed: safeNum(_goesPushRaw.amv_wind_speed),
+    amv_wind_dir: safeNum(_goesPushRaw.amv_wind_dir),
+    turbidity_idx: safeNum(_goesPushRaw.turbidity_idx),
+  } : null
   const aqiVal = aqi?.readings?.[0]?.aqi
   const aqiCat = aqi?.readings?.[0]?.category
 
@@ -270,7 +286,12 @@ export default function ScienceView() {
       if (safeNum(s.water_temperature) != null) rows.push(['CO-OPS', s.name, 'Temperature', safeNum(s.water_temperature), '°F', ''])
       if (safeNum(s.salinity) != null) rows.push(['CO-OPS', s.name, 'Salinity', safeNum(s.salinity), 'ppt', ''])
     })
-    if (goesSst != null) rows.push(['GOES-19', 'Gulf of Mexico', 'SST', goesSst, '°C', ''])
+    if (goesSst != null) rows.push(['GOES-19', 'Gulf of Mexico', 'SST', goesSst, '°C', goesSstSource === 'push' ? 'Push pipeline' : 'ERDDAP'])
+    if (goesPush?.sst_gradient != null) rows.push(['GOES-19', 'Gulf of Mexico', 'SST Gradient', goesPush.sst_gradient, '°C', 'Push pipeline'])
+    if (goesPush?.qpe_rainfall != null) rows.push(['GOES-19', 'Gulf of Mexico', 'QPE Rainfall', goesPush.qpe_rainfall, 'mm', 'Push pipeline'])
+    if (goesPush?.cloud_coverage != null) rows.push(['GOES-19', 'Gulf of Mexico', 'Cloud Cover', goesPush.cloud_coverage, '%', 'Push pipeline'])
+    if (goesPush?.glm_flashes != null) rows.push(['GOES-19', 'Gulf of Mexico', 'GLM Flashes', goesPush.glm_flashes, 'count', 'Push pipeline'])
+    if (goesPush?.bloom_index != null) rows.push(['GOES-19', 'Gulf of Mexico', 'Bloom Index', goesPush.bloom_index, '', 'Push pipeline'])
     if (aqiVal != null) rows.push(['AirNow', 'Mobile Bay', 'AQI', aqiVal, '', ''])
     if (hfSpeed != null) rows.push(['HF Radar', 'Gulf Surface', 'Current Speed', hfSpeed, 'm/s', ''])
     if (omTemp != null) rows.push(['Open-Meteo', 'Mobile Bay', 'Air Temp', omTemp, '°C', ''])
@@ -319,7 +340,7 @@ export default function ScienceView() {
       <div className="grid grid-cols-3 md:grid-cols-9 gap-2 mb-5">
         <StatBox label="Total Streamflow" value={totalFlow != null ? (totalFlow/1000).toFixed(1) : null} unit="K cfs" color="#3b82f6" sub={`${allFlow.length} USGS stations`} freshness={lastFetchedAt.water} />
         <StatBox label="CO-OPS Tide" value={coopsWL.length ? coopsWL[0].toFixed(2) : null} unit="ft MLLW" color="#1d6fcc" sub={`${coopsArr.length} tidal stations`} freshness={lastFetchedAt.water} />
-        <StatBox label="GOES-19 SST" value={goesSst?.toFixed(1) || (goesImagery ? 'Imagery' : null)} unit={goesSst != null ? '°C' : ''} color="#1d6fcc" sub={goesSst != null ? 'Gulf hourly' : goesImagery ? 'SST offline · Imagery active' : 'Gulf hourly'} freshness={lastFetchedAt.goes} />
+        <StatBox label="GOES-19 SST" value={goesSst?.toFixed(1) || (goesImagery ? 'Imagery' : null)} unit={goesSst != null ? '°C' : ''} color="#1d6fcc" sub={goesSst != null ? (goesSstSource === 'push' ? 'Push pipeline · 5-min' : 'Gulf hourly') : goesImagery ? 'SST offline · Imagery active' : 'Gulf hourly'} freshness={lastFetchedAt.goes} />
         <StatBox label="Air Quality" value={aqiVal ?? (purpleAirAvg != null ? purpleAirAvg.toFixed(0) : null)} unit={aqiVal != null ? 'AQI' : purpleAirAvg != null ? 'PM2.5' : 'AQI'} color={aqiVal!=null&&aqiVal>100?'#dc2626':'#10b981'} sub={aqiCat || (purpleAirAvg != null ? `PurpleAir ${purpleAirSensors.length} sensors` : 'AirNow')} freshness={lastFetchedAt.aqi} />
         <StatBox label="PurpleAir PM2.5" value={purpleAirAvg?.toFixed(1)} unit="µg/m³" color={purpleAirAvg != null && purpleAirAvg > 12 ? '#dc2626' : '#3b82f6'} sub={`${purpleAirSensors.length} local sensors`} freshness={lastFetchedAt.sensors} />
         <StatBox label="Water Temp" value={allTemp.length?(allTemp.reduce((a,b)=>a+b,0)/allTemp.length).toFixed(1):coopsTemp.length?((coopsTemp.reduce((a,b)=>a+b,0)/coopsTemp.length-32)*5/9).toFixed(1):omTemp?.toFixed(1)} unit="°C" color="#f59e0b" sub={allTemp.length?`${allTemp.length} USGS`:coopsTemp.length?`${coopsTemp.length} CO-OPS`:'Open-Meteo'} freshness={lastFetchedAt.water} />
@@ -453,12 +474,13 @@ export default function ScienceView() {
             </div>
           </div>
 
-          <SectionLabel title="Ocean Conditions & Currents" badge={hfOk ? 'LIVE' : hycomActive || goesImagery ? 'PARTIAL' : 'LOADING'} />
+          <SectionLabel title="Ocean Conditions & Currents" badge={hfOk || goesPush?.available ? 'LIVE' : hycomActive || goesImagery ? 'PARTIAL' : 'LOADING'} />
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             <div className="tw-card">
               <div className="tw-label mb-1">GOES-19 SST</div>
               <div className="tw-mono text-2xl font-bold text-blue-600">{goesSst?.toFixed(1) ?? '—'}<span className="text-xs font-normal text-bay-400 ml-1">°C</span></div>
-              <div className="text-[10px] text-bay-400 mt-1">{goesSst != null ? 'Gulf of Mexico · Hourly' : goesImagery ? 'SST ERDDAP offline · Imagery active' : 'Gulf of Mexico · Hourly'}</div>
+              <div className="text-[10px] text-bay-400 mt-1">{goesSst != null ? (goesSstSource === 'push' ? 'Push pipeline · 5-min' : 'Gulf of Mexico · Hourly') : goesImagery ? 'SST ERDDAP offline · Imagery active' : 'Gulf of Mexico · Hourly'}</div>
+              {goesPush?.sst_gradient != null && <div className="text-[9px] text-bay-500 mt-0.5">Gradient: {goesPush.sst_gradient.toFixed(1)}°C</div>}
               {goesImagery && !goesSst && <div className="text-[9px] text-emerald-600 mt-0.5">GEOCOLOR imagery streaming</div>}
             </div>
             <div className="tw-card">
@@ -477,12 +499,16 @@ export default function ScienceView() {
               <div className="text-[10px] text-bay-400 mt-1">{oceanStatus?.hycom?.product || '1/12° global model'}</div>
             </div>
           </div>
-          {(hycomActive || cmemsActive || goesImagery) && (
+          {(hycomActive || cmemsActive || goesImagery || goesPush?.available) && (
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
               {cmemsActive && <StatBox label="CMEMS Copernicus" value="Active" color="#10b981" sub="Marine service" />}
               {hycomActive && <StatBox label="HYCOM 1/12°" value="Active" color="#10b981" sub="Global ocean model" />}
               {oceanStatus?.streamstats?.available && <StatBox label="USGS StreamStats" value="Active" color="#10b981" sub="Watershed delineation" />}
               {goesImagery && <StatBox label="GOES-19 Imagery" value="Streaming" color="#10b981" sub="GEOCOLOR 5-min refresh" />}
+              {goesPush?.qpe_rainfall != null && <StatBox label="GOES QPE Rainfall" value={goesPush.qpe_rainfall.toFixed(1)} unit="mm" color="#3b82f6" sub={`6h: ${goesPush.qpe_6h?.toFixed(1) ?? '—'}mm · 24h: ${goesPush.qpe_24h?.toFixed(1) ?? '—'}mm`} />}
+              {goesPush?.cloud_coverage != null && <StatBox label="GOES Cloud Cover" value={goesPush.cloud_coverage.toFixed(0)} unit="%" color="#6366f1" sub="ABI cloud mask" />}
+              {goesPush?.glm_flashes != null && <StatBox label="GLM Lightning" value={goesPush.glm_flashes} unit="flashes" color={goesPush.glm_flashes > 5 ? '#dc2626' : '#f59e0b'} sub={goesPush.glm_active ? 'Active storms' : 'Calm'} />}
+              {goesPush?.bloom_index != null && <StatBox label="GOES Bloom Index" value={goesPush.bloom_index.toFixed(3)} color={goesPush.bloom_index >= 0.12 ? '#dc2626' : '#10b981'} sub={goesPush.bloom_index >= 0.12 ? 'Elevated chlorophyll' : 'Normal range'} />}
             </div>
           )}
           {goesImagery && goesStatus?.imagery?.imageUrl && (
