@@ -1,6 +1,6 @@
 import { useEffect } from 'react'
 import { useStore } from '../store/index.js'
-import { StatCard, PageHeader, RiskBadge, Spinner, Section, EmptyState, AlertBanner, SkeletonRow } from '../components/Common/index.jsx'
+import { StatCard, PageHeader, RiskBadge, Spinner, Section, EmptyState, AlertBanner } from '../components/Common/index.jsx'
 import { HABProbabilityChart, WeatherForecastChart } from '../components/Charts/index.jsx'
 import clsx from 'clsx'
 
@@ -67,6 +67,10 @@ export default function Dashboard() {
   const inatCount = ecologyStatus?.iNaturalist?.totalCount
   const totalSensors = sensors?.summary?.active || 0
 
+  const habSparkData = habTimeline.map(m => ({ v: m.probability }))
+  const forecastTemps = landStatus?.openMeteo?.dailyForecast?.map(d => ({ v: d.high_c })) || []
+  const forecastPrecip = landStatus?.openMeteo?.dailyForecast?.map(d => ({ v: d.precipProb || 0 })) || []
+
   const openMeteo = landStatus?.openMeteo
   const forecastData = openMeteo?.dailyForecast?.map(d => {
     const dayName = d.date ? new Date(d.date + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'short' }) : '?'
@@ -106,13 +110,13 @@ export default function Dashboard() {
 
       <Section title="Current Conditions">
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          <StatCard label="HAB Probability" value={habProb != null ? habProb : '—'} unit="%" color={habProb >= 65 ? '#dc2626' : habProb >= 45 ? '#d97706' : '#0a9e80'} icon="⬡" sub={habLevel ? <RiskBadge level={habLevel} /> : 'Calculating...'} riskLevel={habLevel} freshness={lastFetchedAt.hab} />
+          <StatCard label="HAB Probability" value={habProb != null ? habProb : '—'} unit="%" color={habProb >= 65 ? '#dc2626' : habProb >= 45 ? '#d97706' : '#0a9e80'} icon="⬡" sub={habLevel ? <RiskBadge level={habLevel} /> : 'Calculating...'} riskLevel={habLevel} freshness={lastFetchedAt.hab} sparkData={habSparkData} sparkColor={habProb >= 65 ? '#dc2626' : '#d97706'} />
           <StatCard label="Dissolved Oxygen" value={do2 != null ? do2.toFixed(1) : '—'} unit="mg/L" color={doAlert ? '#dc2626' : '#0a9e80'} icon="○" sub={do2 != null ? (doAlert ? '⚠ Below stress threshold' : 'Acceptable range') : 'No data'} alert={doAlert} freshness={lastFetchedAt.water} />
-          <StatCard label="Water Temperature" value={tempF != null ? tempF.toFixed(1) : tempC != null ? tempC.toFixed(1) : '—'} unit={tempF != null ? '°F' : '°C'} color="#1d6fcc" icon="≋" sub={tempC != null ? `${tempC.toFixed(1)}°C` : null} freshness={lastFetchedAt.weather} />
+          <StatCard label="Water Temperature" value={tempF != null ? tempF.toFixed(1) : tempC != null ? tempC.toFixed(1) : '—'} unit={tempF != null ? '°F' : '°C'} color="#1d6fcc" icon="≋" sub={tempC != null ? `${tempC.toFixed(1)}°C` : null} freshness={lastFetchedAt.weather} sparkData={forecastTemps} sparkColor="#1d6fcc" />
           <StatCard label="Salinity" value={salinity != null ? salinity.toFixed(1) : '—'} unit="ppt" color="#7c3aed" icon="◈" sub="Dauphin Island" freshness={lastFetchedAt.water} />
           <StatCard label="Hypoxia Risk" value={hypoxia?.probability ?? '—'} unit="%" color={hypoxia?.probability >= 60 ? '#dc2626' : '#d97706'} icon="〇" sub={hypoxia?.riskLevel ? <RiskBadge level={hypoxia.riskLevel} /> : null} riskLevel={hypoxia?.riskLevel} freshness={lastFetchedAt.hab} />
           <StatCard label="Streamflow" value={streamflow != null ? (streamflow / 1000).toFixed(0) : '—'} unit="K cfs" color="#1d6fcc" icon="〜" sub="Alabama R. + Mobile R." freshness={lastFetchedAt.water} />
-          <StatCard label="Wind Speed" value={windMph != null ? windMph.toFixed(0) : '—'} unit="mph" color="#0a9e80" icon="≈" sub={windDir != null ? `${windDir}° direction` : weather?.current?.description} freshness={lastFetchedAt.weather} />
+          <StatCard label="Wind Speed" value={windMph != null ? windMph.toFixed(0) : '—'} unit="mph" color="#0a9e80" icon="≈" sub={windDir != null ? `${windDir}° direction` : weather?.current?.description} freshness={lastFetchedAt.weather} sparkData={forecastPrecip} sparkColor="#0a9e80" />
           <StatCard label="Jubilee Risk" value={hypoxia?.jubileeRisk ? 'ELEVATED' : 'LOW'} color={hypoxia?.jubileeRisk ? '#dc2626' : '#0a9e80'} icon="★" sub="Mobile Bay east shore" riskLevel={hypoxia?.jubileeRisk ? 'ELEVATED' : 'LOW'} freshness={lastFetchedAt.hab} />
         </div>
       </Section>

@@ -373,7 +373,7 @@ export default function WaterQuality() {
             })}
           </div>
 
-          <div className="tw-card bg-blue-50 border-blue-200">
+          <div className="tw-card bg-blue-50/60 border-blue-200/60 backdrop-blur-sm">
             <div className="tw-label text-blue-600 mb-1.5">Satellite Data Sources</div>
             <div className="space-y-1.5">
               {[

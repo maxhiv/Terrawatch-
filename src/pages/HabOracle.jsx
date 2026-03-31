@@ -65,7 +65,7 @@ export default function HabOracle() {
   const hypoxia = data?.hypoxia
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="p-6 space-y-6 animate-in">
       <div>
         <h1 className="text-2xl font-bold text-bay-900">🔬 HAB Oracle</h1>
         <p className="text-sm mt-1 text-bay-500">
@@ -75,13 +75,13 @@ export default function HabOracle() {
 
       {loading && (
         <div className="tw-card p-8 flex items-center justify-center gap-3">
-          <div className="w-6 h-6 border-2 border-teal-500 border-t-transparent rounded-full animate-spin" />
+          <div className="tw-skeleton h-4 w-48 rounded" />
           <span className="text-bay-500">Running HAB Oracle assessment...</span>
         </div>
       )}
 
       {error && (
-        <div className="tw-card p-4 border-red-300">
+        <div className="tw-card tw-glass-tint-red p-4">
           <p className="text-sm text-red-600">Error: {error}</p>
         </div>
       )}
@@ -90,7 +90,7 @@ export default function HabOracle() {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div className="tw-card p-6">
             <RiskGauge probability={hab.probability} riskLevel={hab.riskLevel} />
-            <div className="mt-4 p-3 rounded-lg bg-bay-800 text-white">
+            <div className="mt-4 p-3 rounded-lg bg-bay-800/90 text-white backdrop-blur-sm">
               <p className="text-xs font-semibold mb-1 text-bay-200">RECOMMENDED ACTION</p>
               <p className="text-sm">{hab.action}</p>
             </div>

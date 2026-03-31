@@ -2,7 +2,7 @@ import { useStore } from '../store/index.js'
 import { PageHeader, StatCard, RiskBadge, Section } from '../components/Common/index.jsx'
 
 export default function HypoxiaForecast() {
-  const { habAssessment, waterQuality } = useStore()
+  const { habAssessment, waterQuality, lastFetchedAt } = useStore()
   const hypoxia = habAssessment?.hypoxia
 
   return (
@@ -11,10 +11,10 @@ export default function HypoxiaForecast() {
 
       <Section title="Current Assessment">
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          <StatCard label="Hypoxia Probability" value={hypoxia?.probability ?? '—'} unit="%" color={hypoxia?.probability >= 60 ? '#dc2626' : '#d97706'} icon="〇" riskLevel={hypoxia?.riskLevel} />
-          <StatCard label="Risk Level" value={hypoxia?.riskLevel || '—'} color="#0a9e80" icon="⬡" sub={hypoxia?.riskLevel ? <RiskBadge level={hypoxia.riskLevel} /> : null} riskLevel={hypoxia?.riskLevel} />
-          <StatCard label="Jubilee Risk" value={hypoxia?.jubileeRisk ? 'ELEVATED' : 'LOW'} color={hypoxia?.jubileeRisk ? '#dc2626' : '#0a9e80'} icon="★" sub="Eastern shore Mobile Bay" riskLevel={hypoxia?.jubileeRisk ? 'ELEVATED' : 'LOW'} />
-          <StatCard label="Bottom DO₂" value={hypoxia?.bottomDO ?? '—'} unit="mg/L" color="#1d6fcc" icon="○" />
+          <StatCard label="Hypoxia Probability" value={hypoxia?.probability ?? '—'} unit="%" color={hypoxia?.probability >= 60 ? '#dc2626' : '#d97706'} icon="〇" riskLevel={hypoxia?.riskLevel} freshness={lastFetchedAt.hab} />
+          <StatCard label="Risk Level" value={hypoxia?.riskLevel || '—'} color="#0a9e80" icon="⬡" sub={hypoxia?.riskLevel ? <RiskBadge level={hypoxia.riskLevel} /> : null} riskLevel={hypoxia?.riskLevel} freshness={lastFetchedAt.hab} />
+          <StatCard label="Jubilee Risk" value={hypoxia?.jubileeRisk ? 'ELEVATED' : 'LOW'} color={hypoxia?.jubileeRisk ? '#dc2626' : '#0a9e80'} icon="★" sub="Eastern shore Mobile Bay" riskLevel={hypoxia?.jubileeRisk ? 'ELEVATED' : 'LOW'} freshness={lastFetchedAt.hab} />
+          <StatCard label="Bottom DO₂" value={hypoxia?.bottomDO ?? '—'} unit="mg/L" color="#1d6fcc" icon="○" freshness={lastFetchedAt.hab} />
         </div>
       </Section>
 

@@ -36,7 +36,7 @@ const PARAM_CODES = { do_mg_l:'00300', water_temp_c:'00010', streamflow_cfs:'000
 
 function StatBox({ label, value, unit, color, sub }) {
   return (
-    <div className="text-center p-2.5 rounded-lg" style={{background:'#f5fbf8',border:'1px solid #cce4d8'}}>
+    <div className="text-center p-2.5 rounded-lg tw-glass">
       <div className="tw-label mb-0.5">{label}</div>
       <div className="tw-mono text-base font-bold" style={{color:color||'#1a3028'}}>{value??'—'}{unit&&<span className="text-[10px] font-normal text-bay-400 ml-0.5">{unit}</span>}</div>
       {sub&&<div className="text-[9px] text-bay-400 mt-0.5">{sub}</div>}
@@ -335,7 +335,7 @@ export default function ScienceView() {
       {activeTab==='overview' && (
         <div className="space-y-4">
           <SectionLabel title="NERRS Weeks Bay — 15-min Water Quality" badge={nerrsOk ? 'LIVE' : nerrsAttempted ? 'CDMO OFFLINE' : 'LOADING'} />
-          <div className="tw-card border-emerald-200" style={{background:'linear-gradient(135deg,#f5fbf8 0%,#ecfdf5 100%)'}}>
+          <div className="tw-card tw-glass-tint-green">
             <div className="flex items-center gap-2 mb-3">
               <div className={clsx('w-2.5 h-2.5 rounded-full flex-shrink-0', nerrsOk ? 'bg-emerald-500 animate-pulse' : nerrsAttempted ? 'bg-amber-400' : 'bg-gray-300')}/>
               <div className="font-bold text-sm text-bay-800 flex-1">Weeks Bay NERR — {nerrsOk ? 'Live Readings' : nerrsAttempted ? 'Service Temporarily Unavailable' : 'Connecting...'}</div>
@@ -356,7 +356,7 @@ export default function ScienceView() {
                 {l:'pH', v:nPH, u:'', c:'#7c3aed'},
                 {l:'SpCond', v:nSpCond, u:'mS/cm', c:'#1d6fcc'},
               ].map(({l,v,u,c,alert:a})=>(
-                <div key={l} className={clsx('rounded-lg p-2 text-center', a?'bg-red-50 border border-red-200':'bg-white/70')}>
+                <div key={l} className={clsx('rounded-lg p-2 text-center backdrop-blur-sm', a?'bg-red-50/70 border border-red-200/60':'bg-white/40')}>
                   <div className="tw-label mb-0.5">{l}</div>
                   <div className="tw-mono text-sm font-bold" style={{color:v!=null?c:'#aed0c2'}}>{v!=null?v.toFixed(2):'—'}{v!=null&&u&&<span className="text-[9px] font-normal text-bay-400 ml-0.5">{u}</span>}</div>
                 </div>
@@ -386,7 +386,7 @@ export default function ScienceView() {
               ].filter(Boolean)
               const hasData = availableParams.length > 0
               return (
-                <div key={s.siteNo} className={clsx('tw-card',alert&&'border-red-200')} style={alert?{background:'#fef2f2'}:{}}>
+                <div key={s.siteNo} className={clsx('tw-card',alert&&'tw-glass-tint-red')}>
                   <div className="flex items-center gap-2 mb-3">
                     <div className={clsx('w-2.5 h-2.5 rounded-full flex-shrink-0',alert?'bg-red-500 animate-pulse':hasData?'bg-emerald-500':'bg-amber-400')}/>
                     <div className="font-bold text-sm text-bay-800 flex-1">{s.name}</div>
