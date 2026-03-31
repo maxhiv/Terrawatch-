@@ -19,6 +19,8 @@ function verifyGoesKey(req, res, next) {
   next()
 }
 
+function isNum(v) { return typeof v === 'number' && isFinite(v) }
+
 router.post('/ingest', verifyGoesKey, async (req, res) => {
   const payload = req.body
 
@@ -26,64 +28,77 @@ router.post('/ingest', verifyGoesKey, async (req, res) => {
     return res.status(400).json({ error: 'Missing scan_timestamp' })
   }
 
-  try {
-    const {
-      scan_timestamp,
-      sst,
-      qpe,
-      cloud_mask,
-      rgb_ratios,
-      glm,
-      amv_winds
-    } = payload
+  const tsMs = Date.parse(payload.scan_timestamp)
+  if (isNaN(tsMs)) {
+    return res.status(400).json({ error: 'Invalid scan_timestamp format — must be ISO 8601 or parseable date string' })
+  }
 
-    const ts = new Date(scan_timestamp).toISOString()
+  try {
+    const { sst, qpe, cloud_mask, rgb_ratios, glm, amv_winds } = payload
+
+    const ts = tsMs
     const src = 'GOES19-PUSH'
     const station = 'GOES19-ABI'
     const rows = []
+    const errors = []
 
     if (sst) {
-      if (sst.mean_c != null) rows.push([ts, src, station, 'sst_mean', sst.mean_c, '°C', MOBILE_BAY_LAT, MOBILE_BAY_LON])
-      if (sst.gradient_c != null) rows.push([ts, src, station, 'sst_gradient', sst.gradient_c, '°C', MOBILE_BAY_LAT, MOBILE_BAY_LON])
-      if (sst.pixel_count != null) rows.push([ts, src, station, 'sst_pixels', sst.pixel_count, 'count', MOBILE_BAY_LAT, MOBILE_BAY_LON])
+      if (sst.mean_c != null && !isNum(sst.mean_c)) errors.push('sst.mean_c must be a number')
+      if (sst.gradient_c != null && !isNum(sst.gradient_c)) errors.push('sst.gradient_c must be a number')
+      if (sst.pixel_count != null && !isNum(sst.pixel_count)) errors.push('sst.pixel_count must be a number')
+      if (isNum(sst.mean_c)) rows.push([ts, src, station, 'sst_mean', sst.mean_c, '°C', MOBILE_BAY_LAT, MOBILE_BAY_LON])
+      if (isNum(sst.gradient_c)) rows.push([ts, src, station, 'sst_gradient', sst.gradient_c, '°C', MOBILE_BAY_LAT, MOBILE_BAY_LON])
+      if (isNum(sst.pixel_count)) rows.push([ts, src, station, 'sst_pixels', sst.pixel_count, 'count', MOBILE_BAY_LAT, MOBILE_BAY_LON])
     }
 
     if (qpe) {
-      if (qpe.rainfall_mm != null) rows.push([ts, src, station, 'qpe_rainfall', qpe.rainfall_mm, 'mm', MOBILE_BAY_LAT, MOBILE_BAY_LON])
-      if (qpe.accum_6h_mm != null) rows.push([ts, src, station, 'qpe_6h', qpe.accum_6h_mm, 'mm', MOBILE_BAY_LAT, MOBILE_BAY_LON])
-      if (qpe.accum_24h_mm != null) rows.push([ts, src, station, 'qpe_24h', qpe.accum_24h_mm, 'mm', MOBILE_BAY_LAT, MOBILE_BAY_LON])
+      if (qpe.rainfall_mm != null && !isNum(qpe.rainfall_mm)) errors.push('qpe.rainfall_mm must be a number')
+      if (qpe.accum_6h_mm != null && !isNum(qpe.accum_6h_mm)) errors.push('qpe.accum_6h_mm must be a number')
+      if (qpe.accum_24h_mm != null && !isNum(qpe.accum_24h_mm)) errors.push('qpe.accum_24h_mm must be a number')
+      if (isNum(qpe.rainfall_mm)) rows.push([ts, src, station, 'qpe_rainfall', qpe.rainfall_mm, 'mm', MOBILE_BAY_LAT, MOBILE_BAY_LON])
+      if (isNum(qpe.accum_6h_mm)) rows.push([ts, src, station, 'qpe_6h', qpe.accum_6h_mm, 'mm', MOBILE_BAY_LAT, MOBILE_BAY_LON])
+      if (isNum(qpe.accum_24h_mm)) rows.push([ts, src, station, 'qpe_24h', qpe.accum_24h_mm, 'mm', MOBILE_BAY_LAT, MOBILE_BAY_LON])
     }
 
     if (cloud_mask && cloud_mask.coverage_pct != null) {
-      rows.push([ts, src, station, 'cloud_coverage', cloud_mask.coverage_pct, '%', MOBILE_BAY_LAT, MOBILE_BAY_LON])
+      if (!isNum(cloud_mask.coverage_pct)) errors.push('cloud_mask.coverage_pct must be a number')
+      else rows.push([ts, src, station, 'cloud_coverage', cloud_mask.coverage_pct, '%', MOBILE_BAY_LAT, MOBILE_BAY_LON])
     }
 
     if (glm) {
-      if (glm.flash_count != null) rows.push([ts, src, station, 'glm_flashes', glm.flash_count, 'count', MOBILE_BAY_LAT, MOBILE_BAY_LON])
+      if (glm.flash_count != null && !isNum(glm.flash_count)) errors.push('glm.flash_count must be a number')
+      if (isNum(glm.flash_count)) rows.push([ts, src, station, 'glm_flashes', glm.flash_count, 'count', MOBILE_BAY_LAT, MOBILE_BAY_LON])
       if (glm.lightning_active != null) rows.push([ts, src, station, 'glm_active', glm.lightning_active ? 1 : 0, 'bool', MOBILE_BAY_LAT, MOBILE_BAY_LON])
     }
 
     if (amv_winds) {
-      if (amv_winds.speed_ms != null) rows.push([ts, src, station, 'amv_wind_speed', amv_winds.speed_ms, 'm/s', MOBILE_BAY_LAT, MOBILE_BAY_LON])
-      if (amv_winds.direction_deg != null) rows.push([ts, src, station, 'amv_wind_dir', amv_winds.direction_deg, 'deg', MOBILE_BAY_LAT, MOBILE_BAY_LON])
+      if (amv_winds.speed_ms != null && !isNum(amv_winds.speed_ms)) errors.push('amv_winds.speed_ms must be a number')
+      if (amv_winds.direction_deg != null && !isNum(amv_winds.direction_deg)) errors.push('amv_winds.direction_deg must be a number')
+      if (isNum(amv_winds.speed_ms)) rows.push([ts, src, station, 'amv_wind_speed', amv_winds.speed_ms, 'm/s', MOBILE_BAY_LAT, MOBILE_BAY_LON])
+      if (isNum(amv_winds.direction_deg)) rows.push([ts, src, station, 'amv_wind_dir', amv_winds.direction_deg, 'deg', MOBILE_BAY_LAT, MOBILE_BAY_LON])
     }
 
     if (rgb_ratios != null) {
       rows.push([ts, src, station, 'rgb_ratios', JSON.stringify(rgb_ratios), 'json', MOBILE_BAY_LAT, MOBILE_BAY_LON])
     }
 
+    if (errors.length > 0) {
+      return res.status(400).json({ error: 'Validation failed', details: errors })
+    }
+
     if (rows.length > 0) {
       await writeReadings(rows)
     }
 
-    latestScan = { scan_timestamp: ts, received_at: new Date().toISOString(), payload, readings_written: rows.length }
+    const isoTs = new Date(tsMs).toISOString()
+    latestScan = { scan_timestamp: isoTs, received_at: new Date().toISOString(), payload, readings_written: rows.length }
 
-    console.log(`[GOES19] Ingested scan ${ts} — ${rows.length} readings written`)
+    console.log(`[GOES19] Ingested scan ${isoTs} — ${rows.length} readings written`)
 
     res.json({
       status: 'ok',
       readings_written: rows.length,
-      scan_timestamp: ts
+      scan_timestamp: isoTs
     })
   } catch (err) {
     console.error('[GOES19] Ingest error:', err)
