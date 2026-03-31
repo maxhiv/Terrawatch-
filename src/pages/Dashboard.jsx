@@ -15,9 +15,9 @@ function safeVal(v) {
 export default function Dashboard() {
   const {
     waterQuality, habAssessment, weather, alerts, loading,
-    nerrs, hfradar, aqi, goesStatus, ecologyStatus, sensors,
+    nerrs, hfradar, aqi, goesStatus, ecologyStatus, sensors, landStatus,
     fetchAll, fetchNERRS, fetchHFRadar, fetchAQI, fetchGOESStatus,
-    fetchEcologyStatus, lastUpdated
+    fetchEcologyStatus, fetchLandStatus, lastUpdated
   } = useStore()
 
   const isLoading = Object.values(loading).some(Boolean)
@@ -28,6 +28,7 @@ export default function Dashboard() {
     fetchAQI()
     fetchGOESStatus()
     fetchEcologyStatus()
+    fetchLandStatus()
   }, [])
 
   const habProb = habAssessment?.hab?.probability
@@ -66,12 +67,13 @@ export default function Dashboard() {
   const inatCount = ecologyStatus?.iNaturalist?.totalCount
   const totalSensors = sensors?.summary?.active || 0
 
-  const forecastData = weather?.forecast?.periods?.slice(0, 7)?.map((p, i) => ({
-    day: p.name?.substring(0, 3) || `D${i}`,
-    high: p.isDaytime !== false ? p.temperature : null,
-    low: p.isDaytime === false ? p.temperature : null,
-    precipChance: p.probabilityOfPrecipitation?.value || 0,
-  })).filter(d => d.high != null || d.low != null) || []
+  const openMeteo = landStatus?.openMeteo
+  const forecastData = openMeteo?.dailyForecast?.map(d => {
+    const dayName = d.date ? new Date(d.date + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'short' }) : '?'
+    const highF = d.high_c != null ? Math.round(d.high_c * 9/5 + 32) : null
+    const lowF = d.low_c != null ? Math.round(d.low_c * 9/5 + 32) : null
+    return { day: dayName, high: highF, low: lowF, precipChance: d.precipProb || 0 }
+  }) || []
 
   return (
     <div className="p-6 max-w-7xl animate-in">
@@ -260,7 +262,7 @@ export default function Dashboard() {
 
       {forecastData.length > 0 && (
         <div className="tw-card mb-6">
-          <div className="tw-label mb-3">7-Day Forecast — NWS Mobile Bay</div>
+          <div className="tw-label mb-3">7-Day Forecast — Open-Meteo</div>
           <WeatherForecastChart data={forecastData} />
         </div>
       )}

@@ -19,7 +19,7 @@ export async function getOpenMeteoWeather(lat = MOB_LAT, lon = MOB_LON) {
         latitude:          lat,
         longitude:         lon,
         hourly:            'temperature_2m,relative_humidity_2m,precipitation,wind_speed_10m,wind_direction_10m,surface_pressure,cape',
-        daily:             'precipitation_sum,wind_speed_10m_max,wind_direction_10m_dominant,precipitation_probability_max',
+        daily:             'temperature_2m_max,temperature_2m_min,precipitation_sum,wind_speed_10m_max,wind_direction_10m_dominant,precipitation_probability_max',
         wind_speed_unit:   'ms',
         precipitation_unit:'mm',
         timezone:          'America/Chicago',
@@ -43,6 +43,8 @@ export async function getOpenMeteoWeather(lat = MOB_LAT, lon = MOB_LON) {
       } : null,
       dailyForecast: data.daily?.time?.map((t, i) => ({
         date:        t,
+        high_c:      data.daily.temperature_2m_max?.[i],
+        low_c:       data.daily.temperature_2m_min?.[i],
         precip_mm:   data.daily.precipitation_sum?.[i],
         maxWind_ms:  data.daily.wind_speed_10m_max?.[i],
         windDir:     data.daily.wind_direction_10m_dominant?.[i],
