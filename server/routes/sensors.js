@@ -254,12 +254,8 @@ router.get('/goes/image', async (req, res) => {
 
 router.get('/goes/all', async (req, res) => {
   try {
-    const [goesResult, pushRes] = await Promise.allSettled([
-      getAllGOESStatus(),
-      fetch(`http://localhost:${process.env.PORT || 3001}/api/goes19/push-latest`).then(r => r.json()),
-    ])
-    const goes = goesResult.status === 'fulfilled' ? goesResult.value : { status: { available: false }, imagery: { available: false } }
-    const push = pushRes.status === 'fulfilled' ? pushRes.value : {}
+    const goes = await getAllGOESStatus().catch(() => ({ status: { available: false }, imagery: { available: false } }))
+    const push = req.app.locals.getGoesLatest ? req.app.locals.getGoesLatest() : {}
 
     const hasErddapSST = goes.status?.latestSST_C != null
     const hasPushSST = push.sst_mean != null

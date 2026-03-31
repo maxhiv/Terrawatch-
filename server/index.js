@@ -107,6 +107,9 @@ if (existsSync(join(distPath, 'index.html'))) {
 // Both layers are merged into _latestData so every persistTick call has the full picture.
 // Slow sources default to {} so the feature vector degrades gracefully until first fetch.
 
+function getGoesLatest() { return _latestData.goesLatest || {} }
+app.locals.getGoesLatest = getGoesLatest
+
 let _latestData = {
   waterQuality: { usgs: [], coops: {} },
   hfRadar:    null,
