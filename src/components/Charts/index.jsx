@@ -84,12 +84,30 @@ export function WeatherForecastChart({ data, height = 200 }) {
 
 export function AirQualityChart({ data, height = 180 }) {
   if (!data?.length) return null
+  const hasMultiSource = data.some(d => d.openAQ != null || d.purpleAir != null || d.epaAQS != null)
   function aqiColor(v) {
     if (v <= 50) return '#10b981'
     if (v <= 100) return '#f59e0b'
     if (v <= 150) return '#f97316'
     if (v <= 200) return '#dc2626'
     return '#7c2d12'
+  }
+  if (hasMultiSource) {
+    return (
+      <ResponsiveContainer width="100%" height={height}>
+        <BarChart data={data} margin={{ top: 4, right: 8, bottom: 0, left: -10 }}>
+          <CartesianGrid strokeDasharray="3 3" stroke="#e2f0ea" />
+          <XAxis dataKey="parameter" tick={{ fontSize: 9, fill: '#4a7060', fontFamily: 'JetBrains Mono' }} />
+          <YAxis tick={{ fontSize: 9, fill: '#4a7060', fontFamily: 'JetBrains Mono' }} domain={[0, 'auto']} />
+          <Tooltip content={<ChartTooltip />} />
+          <Legend wrapperStyle={{ fontSize: 10, fontFamily: 'JetBrains Mono' }} />
+          <Bar dataKey="airNow" name="AirNow" fill="#10b981" radius={[4, 4, 0, 0]} />
+          <Bar dataKey="openAQ" name="OpenAQ" fill="#3b82f6" radius={[4, 4, 0, 0]} />
+          <Bar dataKey="purpleAir" name="PurpleAir" fill="#a855f7" radius={[4, 4, 0, 0]} />
+          <Bar dataKey="epaAQS" name="EPA AQS" fill="#f59e0b" radius={[4, 4, 0, 0]} />
+        </BarChart>
+      </ResponsiveContainer>
+    )
   }
   return (
     <ResponsiveContainer width="100%" height={height}>

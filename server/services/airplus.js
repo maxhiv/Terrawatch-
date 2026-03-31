@@ -205,16 +205,43 @@ export async function getPurpleAirReadings() {
 }
 
 export async function getAllAirQualityStatus() {
-  const [aqs, openaq, purpleair] = await Promise.allSettled([
+  const [aqs, openaqMeta, openaqLatest, purpleair] = await Promise.allSettled([
     getAQSCurrentData(),
     getOpenAQReadings(),
+    getOpenAQLatest(),
     getPurpleAirReadings(),
   ])
 
+  const oqMeta = openaqMeta.status === 'fulfilled' ? openaqMeta.value : { available: false }
+  const oqLatest = openaqLatest.status === 'fulfilled' ? openaqLatest.value : {}
+  const oqReadings = oqLatest.readings || []
+  const oqAvgPM25 = oqReadings.length > 0
+    ? oqReadings.reduce((s,r) => s + (r.value||0), 0) / oqReadings.length
+    : null
+  const openAQResult = {
+    ...oqMeta,
+    available: oqMeta.available || oqLatest.available || false,
+    readings: oqReadings,
+    avgPM25: oqAvgPM25,
+  }
+
+  const pa = purpleair.status === 'fulfilled' ? purpleair.value : { available: false }
+  const paSensors = pa.sensors || []
+  const paVals = paSensors.map(s => s.pm25).filter(v => v != null && !isNaN(v))
+  const paAvgPM25 = paVals.length > 0 ? paVals.reduce((s,v) => s+v, 0) / paVals.length : null
+  const purpleAirResult = { ...pa, avgPM25: paAvgPM25 }
+
+  const aqsResult = aqs.status === 'fulfilled' ? aqs.value : { available: false }
+  const aqsReadings = aqsResult.readings || []
+  const aqsAvgVal = aqsReadings.length > 0
+    ? aqsReadings.reduce((s,r) => s + (r.value||0), 0) / aqsReadings.length
+    : null
+  aqsResult.avgValue = aqsAvgVal
+
   return {
-    epaAQS:    aqs.status === 'fulfilled' ? aqs.value : { available: false },
-    openAQ:    openaq.status === 'fulfilled' ? openaq.value : { available: false },
-    purpleAir: purpleair.status === 'fulfilled' ? purpleair.value : { available: false },
+    epaAQS:    { ...aqsResult, configured: !!(process.env.AQS_EMAIL && process.env.AQS_API_KEY) },
+    openAQ:    openAQResult,
+    purpleAir: { ...purpleAirResult, configured: !!process.env.PURPLEAIR_API_KEY },
     totalSources: 3,
   }
 }

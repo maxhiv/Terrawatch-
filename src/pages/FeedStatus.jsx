@@ -56,6 +56,8 @@ function deriveStatus(d) {
   if (!d) return 'partial'
   if (d.available === true) return 'live'
   if (d.configured === false || d.reason?.includes('not configured')) return 'keyed'
+  if (d.configured === true && d.available !== false) return 'live'
+  if (d.available === false && d.configured !== true) return 'partial'
   if (d.available === false) return 'partial'
   return 'partial'
 }
@@ -94,7 +96,22 @@ function buildSatelliteChartData(sat) {
   return items
 }
 
-function buildAqiChartData(aqiData) {
+function buildAqiChartData(aqiData, airplusData) {
+  if (!aqiData?.readings?.length && !airplusData) return []
+  const airNowPM25 = aqiData?.readings?.find(r => (r.parameter||'').includes('PM2.5'))?.aqi
+  const airNowO3 = aqiData?.readings?.find(r => (r.parameter||'').includes('O3') || (r.parameter||'').includes('Ozone'))?.aqi
+  const openAQPM25 = safeNum(airplusData?.openAQ?.avgPM25)
+  const purpleAirPM25 = safeNum(airplusData?.purpleAir?.avgPM25)
+  const epaAQSVal = safeNum(airplusData?.epaAQS?.avgValue)
+
+  const hasMulti = openAQPM25 != null || purpleAirPM25 != null || epaAQSVal != null
+
+  if (hasMulti) {
+    return [
+      { parameter: 'PM2.5', airNow: airNowPM25 || null, openAQ: openAQPM25, purpleAir: purpleAirPM25, epaAQS: epaAQSVal },
+      ...(airNowO3 ? [{ parameter: 'Ozone', airNow: airNowO3, openAQ: null, purpleAir: null, epaAQS: null }] : []),
+    ]
+  }
   if (!aqiData?.readings?.length) return []
   return aqiData.readings.map(r => ({
     parameter: r.parameter || r.ParameterName || 'AQI',
@@ -235,9 +252,21 @@ export default function FeedStatus() {
 
   const airIcons = { epaAQS:'📊', openAQ:'🌐', purpleAir:'💜' }
   const airExtras = {
-    openAQ: { value: d => safeNum(d?.readings?.[0]?.value), unit: d => d?.readings?.[0]?.parameter || '' },
-    purpleAir: { value: d => safeNum(d?.avgPM25), unit: d => d?.avgPM25 != null ? 'µg/m³ PM2.5' : '' },
-    epaAQS: { sub: d => d?.configured===false ? 'AQS_EMAIL + AQS_API_KEY required' : '' },
+    openAQ: {
+      value: d => safeNum(d?.avgPM25),
+      unit: d => d?.avgPM25 != null ? 'µg/m³ PM2.5' : '',
+      sub: d => d?.available ? `${d?.readings?.length || d?.locationCount || 0} readings/locations` : 'No data',
+    },
+    purpleAir: {
+      value: d => safeNum(d?.avgPM25),
+      unit: d => d?.avgPM25 != null ? 'µg/m³ PM2.5' : '',
+      sub: d => d?.available ? `${d?.sensorCount || 0} sensors in area` : d?.configured===false ? 'PURPLEAIR_API_KEY required' : '',
+    },
+    epaAQS: {
+      value: d => safeNum(d?.avgValue),
+      unit: d => d?.avgValue != null ? 'µg/m³' : '',
+      sub: d => d?.configured===false ? 'AQS_EMAIL + AQS_API_KEY required' : `${d?.records || 0} records`,
+    },
   }
   const airFeeds = [
     { key:'nws', name:'NOAA NWS', icon:'≈', status:weather?.current?.temp_f!=null?'live':'partial', value:weather?.current?.temp_f?.toFixed(1), unit:'°F', badge:'Mobile Bay forecast', sub:weather?.current?.description || 'Fetching...' },
@@ -259,7 +288,7 @@ export default function FeedStatus() {
   ]
 
   const satChartData = buildSatelliteChartData(satelliteStatus)
-  const aqiChartData = buildAqiChartData(aqi)
+  const aqiChartData = buildAqiChartData(aqi, airplusStatus)
   const openMeteoForecast = buildOpenMeteoForecastData(landStatus?.openMeteo)
   const oceanChartData = buildOceanTimeData(oceanStatus)
 
@@ -297,7 +326,7 @@ export default function FeedStatus() {
 
       {aqiChartData.length > 0 && (
         <div className="tw-card mb-6">
-          <div className="tw-label mb-3">Air Quality Index — Current Readings</div>
+          <div className="tw-label mb-3">Air Quality — Multi-Source Comparison (AirNow · OpenAQ · PurpleAir · EPA AQS)</div>
           <AirQualityChart data={aqiChartData} />
         </div>
       )}
