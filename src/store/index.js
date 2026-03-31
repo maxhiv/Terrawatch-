@@ -24,6 +24,7 @@ export const useStore = create((set, get) => ({
   goesStatus: null,
 
   lastUpdated: null,
+  lastFetchedAt: {},
   liveMode: true,
   loading: { water: false, hab: false, weather: false, alerts: false },
 
@@ -55,6 +56,7 @@ export const useStore = create((set, get) => ({
           buoy: data.buoy || s.waterQuality.buoy,
         },
         loading: { ...s.loading, water: false },
+        lastFetchedAt: { ...s.lastFetchedAt, water: Date.now() },
       }))
     } catch (e) {
       console.error('[Store] water fetch error:', e)
@@ -67,7 +69,7 @@ export const useStore = create((set, get) => ({
     try {
       const res = await fetch(`${API}/api/hab/assess`)
       const data = await res.json()
-      set(s => ({ habAssessment: data, loading: { ...s.loading, hab: false } }))
+      set(s => ({ habAssessment: data, loading: { ...s.loading, hab: false }, lastFetchedAt: { ...s.lastFetchedAt, hab: Date.now() } }))
     } catch (e) {
       console.error('[Store] HAB fetch error:', e)
       set(s => ({ loading: { ...s.loading, hab: false } }))
@@ -79,7 +81,7 @@ export const useStore = create((set, get) => ({
     try {
       const res = await fetch(`${API}/api/weather/current`)
       const data = await res.json()
-      set(s => ({ weather: data, loading: { ...s.loading, weather: false } }))
+      set(s => ({ weather: data, loading: { ...s.loading, weather: false }, lastFetchedAt: { ...s.lastFetchedAt, weather: Date.now() } }))
     } catch (e) {
       console.error('[Store] weather fetch error:', e)
       set(s => ({ loading: { ...s.loading, weather: false } }))
@@ -102,7 +104,7 @@ export const useStore = create((set, get) => ({
     try {
       const res = await fetch(`${API}/api/sensors/registry`)
       const data = await res.json()
-      set({ sensors: data })
+      set(s => ({ sensors: data, lastFetchedAt: { ...s.lastFetchedAt, sensors: Date.now() } }))
     } catch (e) { console.error('[Store] sensors fetch error:', e) }
   },
 
@@ -110,7 +112,7 @@ export const useStore = create((set, get) => ({
     try {
       const res = await fetch(`${API}/api/sensors/nerrs/latest`)
       const data = await res.json()
-      set({ nerrs: data })
+      set(s => ({ nerrs: data, lastFetchedAt: { ...s.lastFetchedAt, nerrs: Date.now() } }))
     } catch (e) {
       console.error('[Store] NERRS fetch error:', e)
       set({ nerrs: { waterQuality: { available: false, error: e.message }, meteorological: { available: false }, stationName: 'Weeks Bay NERR' } })
@@ -121,7 +123,7 @@ export const useStore = create((set, get) => ({
     try {
       const res = await fetch(`${API}/api/sensors/hfradar/summary`)
       const data = await res.json()
-      set({ hfradar: data })
+      set(s => ({ hfradar: data, lastFetchedAt: { ...s.lastFetchedAt, hfradar: Date.now() } }))
     } catch (e) {
       console.error('[Store] HF Radar fetch error:', e)
       set({ hfradar: { available: false, error: e.message } })
@@ -164,7 +166,7 @@ export const useStore = create((set, get) => ({
     try {
       const res = await fetch(`${API}/api/sensors/epa/aqi`)
       const data = await res.json()
-      set({ aqi: data })
+      set(s => ({ aqi: data, lastFetchedAt: { ...s.lastFetchedAt, aqi: Date.now() } }))
     } catch (e) { console.error('[Store] AQI fetch error:', e) }
   },
 
@@ -212,7 +214,7 @@ export const useStore = create((set, get) => ({
     try {
       const res = await fetch(`${API}/api/sensors/goes/all`)
       const data = await res.json()
-      set({ goesStatus: data })
+      set(s => ({ goesStatus: data, lastFetchedAt: { ...s.lastFetchedAt, goes: Date.now() } }))
     } catch (e) { console.error('[Store] GOES status error:', e) }
   },
 }))

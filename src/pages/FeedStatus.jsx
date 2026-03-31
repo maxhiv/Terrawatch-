@@ -17,7 +17,7 @@ const STATUS_STYLES = {
 function FeedCard({ name, icon, status, value, unit, sub, note, worldFirst, badge }) {
   const s = STATUS_STYLES[status] || STATUS_STYLES.planned
   return (
-    <div className={clsx('tw-card hover:shadow-md transition-shadow', status==='offline'&&'border-red-200 bg-red-50')}>
+    <div className={clsx('tw-card hover:shadow-md hover:-translate-y-0.5 transition-all', status==='offline'&&'tw-glass-tint-red')}>
       <div className="flex items-start justify-between mb-2">
         <div className="flex items-center gap-2 flex-1 min-w-0">
           <div className={clsx('w-2 h-2 rounded-full flex-shrink-0 mt-0.5', s.dot, status==='live'&&'animate-pulse')} />

@@ -11,8 +11,9 @@ Planetary Environmental Intelligence Platform — Mobile Bay & Gulf Coast
 - **State management**: Zustand
 - **Database**: SQLite via sql.js (pure JS, `data/terrawatch.db`)
 - **ML Pipeline**: Logistic regression (Phase 1) → Random Forest (Phase 2) → CNN-LSTM on Vertex AI (Phase 3)
-- **Styling**: Tailwind CSS (light green/white bay theme)
-- **Charts**: Recharts
+- **Styling**: Tailwind CSS (glassmorphism theme — frosted glass cards, gradient bg, risk tints)
+- **Icons**: Lucide React (sidebar navigation)
+- **Charts**: Recharts (includes inline sparklines in StatCards)
 - **Maps**: Leaflet
 
 ## Project Structure
@@ -36,7 +37,7 @@ terrawatch/
 │   │   ├── Vision.jsx          # Platform vision
 │   │   └── MLArchitecture.jsx  # ML architecture docs
 │   ├── components/
-│   │   ├── Common/index.jsx    # StatCard, PageHeader, RiskBadge, Spinner, Section, EmptyState, AlertBanner
+│   │   ├── Common/index.jsx    # StatCard (glass, risk tints, sparklines, freshness), PageHeader, RiskBadge, Spinner, SkeletonCard, SkeletonRow, Section, EmptyState, AlertBanner
 │   │   ├── Charts/index.jsx    # DOChart, HABProbabilityChart, WeatherForecastChart, AirQualityChart, SatelliteTimelineChart, OceanConditionsChart
 │   │   └── Layout/Layout.jsx   # Sidebar navigation (16 routes)
 │   ├── store/index.js          # Zustand store (all API fetchers)
