@@ -59,7 +59,7 @@ app.get('/api/health', async (req, res) => {
   res.json({
     status: 'operational',
     timestamp: new Date().toISOString(),
-    version: '2.0.0',
+    version: '2.1.0',
     platform: 'TERRAWATCH',
     intelligence: {
       phase,
@@ -86,7 +86,7 @@ app.get('/api/health', async (req, res) => {
         land:       _latestData.land      != null,
         airplus:    _latestData.airplus   != null,
       },
-      featureVectorSize: Object.keys(_latestData).length > 2 ? '80+' : '~40',
+      featureVectorSize: Object.keys(_latestData).length > 2 ? '95+' : '~40',
     },
   })
 })

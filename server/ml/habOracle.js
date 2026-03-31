@@ -264,7 +264,7 @@ export function runHabOracle(inputs) {
       goesConnected: goes_sst_gradient != null || goes_bloom_index != null,
       hfRadarConnected: hf_speed_ms != null,
     },
-    version: '2.0.0',
+    version: '2.1.0',
     methodology: 'Multi-feed weighted ensemble + Bayesian seasonal prior. Based on Gulf Coast K. brevis ecology (Stumpf et al., NOAA).',
   }
 }
