@@ -4,6 +4,7 @@ import cors from 'cors'
 import rateLimit from 'express-rate-limit'
 import { fileURLToPath } from 'url'
 import { dirname, join } from 'path'
+import { existsSync } from 'fs'
 import cron from 'node-cron'
 
 import waterQualityRoutes from './routes/waterQuality.js'
@@ -30,7 +31,7 @@ const app = express()
 const PORT = process.env.PORT || 3001
 
 app.set('trust proxy', 1)
-app.use(cors({ origin: process.env.NODE_ENV === 'production' ? 'https://terrawatch.io' : '*' }))
+app.use(cors({ origin: '*' }))
 app.use(express.json())
 
 const limiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 500, standardHeaders: true })
@@ -64,9 +65,10 @@ app.get('/api/health', async (req, res) => {
   })
 })
 
-if (process.env.NODE_ENV === 'production') {
-  app.use(express.static(join(__dirname, '../dist')))
-  app.get('*', (req, res) => res.sendFile(join(__dirname, '../dist/index.html')))
+const distPath = join(__dirname, '../dist')
+if (existsSync(join(distPath, 'index.html'))) {
+  app.use(express.static(distPath))
+  app.get('*', (req, res) => res.sendFile(join(distPath, 'index.html')))
 }
 
 let _latestData = {}
