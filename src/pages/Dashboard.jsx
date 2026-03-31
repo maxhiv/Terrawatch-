@@ -1,6 +1,6 @@
 import { useEffect } from 'react'
 import { useStore } from '../store/index.js'
-import { StatCard, PageHeader, RiskBadge, Spinner, Section, EmptyState, AlertBanner } from '../components/Common/index.jsx'
+import { StatCard, PageHeader, RiskBadge, Spinner, Section, EmptyState, AlertBanner, SkeletonCard } from '../components/Common/index.jsx'
 import { HABProbabilityChart, WeatherForecastChart } from '../components/Charts/index.jsx'
 import clsx from 'clsx'
 
@@ -115,7 +115,7 @@ export default function Dashboard() {
           <StatCard label="Water Temperature" value={tempF != null ? tempF.toFixed(1) : tempC != null ? tempC.toFixed(1) : '—'} unit={tempF != null ? '°F' : '°C'} color="#1d6fcc" icon="≋" sub={tempC != null ? `${tempC.toFixed(1)}°C` : null} freshness={lastFetchedAt.weather} sparkData={forecastTemps} sparkColor="#1d6fcc" />
           <StatCard label="Salinity" value={salinity != null ? salinity.toFixed(1) : '—'} unit="ppt" color="#7c3aed" icon="◈" sub="Dauphin Island" freshness={lastFetchedAt.water} />
           <StatCard label="Hypoxia Risk" value={hypoxia?.probability ?? '—'} unit="%" color={hypoxia?.probability >= 60 ? '#dc2626' : '#d97706'} icon="〇" sub={hypoxia?.riskLevel ? <RiskBadge level={hypoxia.riskLevel} /> : null} riskLevel={hypoxia?.riskLevel} freshness={lastFetchedAt.hab} />
-          <StatCard label="Streamflow" value={streamflow != null ? (streamflow / 1000).toFixed(0) : '—'} unit="K cfs" color="#1d6fcc" icon="〜" sub="Alabama R. + Mobile R." freshness={lastFetchedAt.water} />
+          <StatCard label="Streamflow" value={streamflow != null ? (streamflow / 1000).toFixed(0) : '—'} unit="K cfs" color="#1d6fcc" icon="〜" sub="Alabama R. + Mobile R." freshness={lastFetchedAt.water} sparkData={usgs.map(s => ({ v: safeVal(s.readings?.streamflow_cfs) || 0 })).filter(d => d.v > 0)} sparkColor="#1d6fcc" />
           <StatCard label="Wind Speed" value={windMph != null ? windMph.toFixed(0) : '—'} unit="mph" color="#0a9e80" icon="≈" sub={windDir != null ? `${windDir}° direction` : weather?.current?.description} freshness={lastFetchedAt.weather} sparkData={forecastPrecip} sparkColor="#0a9e80" />
           <StatCard label="Jubilee Risk" value={hypoxia?.jubileeRisk ? 'ELEVATED' : 'LOW'} color={hypoxia?.jubileeRisk ? '#dc2626' : '#0a9e80'} icon="★" sub="Mobile Bay east shore" riskLevel={hypoxia?.jubileeRisk ? 'ELEVATED' : 'LOW'} freshness={lastFetchedAt.hab} />
         </div>
@@ -124,7 +124,7 @@ export default function Dashboard() {
       <Section title="Extended Monitoring">
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           <StatCard label="GOES-19 SST" value={goesSst != null ? goesSst.toFixed(1) : '—'} unit="°C" color="#d97706" icon="🛰️" sub="Gulf of Mexico · Hourly" freshness={lastFetchedAt.goes} />
-          <StatCard label="Air Quality" value={aqiVal ?? '—'} unit="AQI" color={aqiVal > 100 ? '#dc2626' : aqiVal > 50 ? '#f59e0b' : '#10b981'} icon="🌬️" sub={aqiCat || 'AirNow'} alert={aqiVal > 100} freshness={lastFetchedAt.aqi} />
+          <StatCard label="Air Quality" value={aqiVal ?? '—'} unit="AQI" color={aqiVal > 100 ? '#dc2626' : aqiVal > 50 ? '#f59e0b' : '#10b981'} icon="🌬️" sub={aqiCat || 'AirNow'} alert={aqiVal > 100} freshness={lastFetchedAt.aqi} sparkData={(aqi?.readings || []).map(r => ({ v: r.aqi || 0 }))} sparkColor={aqiVal > 100 ? '#dc2626' : '#10b981'} />
           <StatCard label="Biodiversity" value={inatCount ?? '—'} unit="obs" color="#16a34a" icon="🦎" sub="iNaturalist 7-day" freshness={lastFetchedAt.sensors} />
           <StatCard label="Active Feeds" value={totalSensors || '—'} color="#0a9e80" icon="⊞" sub={`${sensors?.summary?.totalActiveFeeds || '—'} total feeds`} freshness={lastFetchedAt.sensors} />
         </div>
@@ -197,8 +197,12 @@ export default function Dashboard() {
             <div className="tw-label">HAB Oracle — Seasonal Probability</div>
             <span className="tw-mono text-[8px] px-1.5 py-0.5 rounded bg-teal-100 text-teal-700 border border-teal-200">★ WORLD FIRST</span>
           </div>
-          {isLoading ? (
-            <div className="flex justify-center py-10"><Spinner /></div>
+          {loading.hab && !habAssessment ? (
+            <div className="space-y-2 py-4">
+              <div className="tw-skeleton h-4 w-full" />
+              <div className="tw-skeleton h-32 w-full" />
+              <div className="tw-skeleton h-3 w-2/3" />
+            </div>
           ) : habTimeline.length ? (
             <HABProbabilityChart data={habTimeline} />
           ) : (
@@ -238,8 +242,10 @@ export default function Dashboard() {
               )
             })}
             {(!waterQuality?.usgs || waterQuality.usgs.length === 0) && (
-              isLoading
-                ? <div className="flex justify-center py-6"><Spinner /></div>
+              loading.water
+                ? <div className="space-y-2 py-3">
+                    {[1,2,3].map(i => <div key={i} className="tw-skeleton h-8 w-full rounded-lg" />)}
+                  </div>
                 : <EmptyState icon="≋" message="Fetching USGS station data..." />
             )}
           </div>
@@ -264,12 +270,20 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {forecastData.length > 0 && (
-        <div className="tw-card mb-6">
-          <div className="tw-label mb-3">7-Day Forecast — Open-Meteo</div>
+      <div className="tw-card mb-6">
+        <div className="tw-label mb-3">7-Day Forecast — Open-Meteo</div>
+        {forecastData.length > 0 ? (
           <WeatherForecastChart data={forecastData} />
-        </div>
-      )}
+        ) : loading.weather ? (
+          <div className="space-y-2 py-4">
+            <div className="tw-skeleton h-4 w-full" />
+            <div className="tw-skeleton h-28 w-full" />
+            <div className="tw-skeleton h-3 w-1/2" />
+          </div>
+        ) : (
+          <EmptyState message="No forecast data available" />
+        )}
+      </div>
 
       {habAssessment?.hab && (
         <Section title="HAB Oracle Assessment Detail">

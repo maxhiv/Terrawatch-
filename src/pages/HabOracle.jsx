@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import clsx from 'clsx'
 
 const API = '/api'
 
@@ -88,7 +89,7 @@ export default function HabOracle() {
 
       {hab && (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div className="tw-card p-6">
+          <div className={clsx('tw-card p-6', hab.riskLevel === 'HIGH' || hab.riskLevel === 'CRITICAL' ? 'tw-glass-tint-red' : hab.riskLevel === 'MODERATE' || hab.riskLevel === 'ELEVATED' ? 'tw-glass-tint-amber' : 'tw-glass-tint-green')}>
             <RiskGauge probability={hab.probability} riskLevel={hab.riskLevel} />
             <div className="mt-4 p-3 rounded-lg bg-bay-800/90 text-white backdrop-blur-sm">
               <p className="text-xs font-semibold mb-1 text-bay-200">RECOMMENDED ACTION</p>

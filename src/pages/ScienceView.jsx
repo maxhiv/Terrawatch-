@@ -34,12 +34,22 @@ const USGS_SITES = {
 }
 const PARAM_CODES = { do_mg_l:'00300', water_temp_c:'00010', streamflow_cfs:'00060', pH:'00400', turbidity_ntu:'00076', conductance_us_cm:'00095' }
 
-function StatBox({ label, value, unit, color, sub }) {
+function timeAgo(ts) {
+  if (!ts) return null
+  const diff = Date.now() - new Date(ts).getTime()
+  if (diff < 60000) return 'just now'
+  if (diff < 3600000) return `${Math.floor(diff/60000)}m ago`
+  if (diff < 86400000) return `${Math.floor(diff/3600000)}h ago`
+  return `${Math.floor(diff/86400000)}d ago`
+}
+
+function StatBox({ label, value, unit, color, sub, freshness }) {
   return (
     <div className="text-center p-2.5 rounded-lg tw-glass">
       <div className="tw-label mb-0.5">{label}</div>
       <div className="tw-mono text-base font-bold" style={{color:color||'#1a3028'}}>{value??'—'}{unit&&<span className="text-[10px] font-normal text-bay-400 ml-0.5">{unit}</span>}</div>
       {sub&&<div className="text-[9px] text-bay-400 mt-0.5">{sub}</div>}
+      {freshness && <div className="text-[8px] text-bay-300 mt-0.5">{timeAgo(freshness)}</div>}
     </div>
   )
 }
@@ -96,6 +106,7 @@ export default function ScienceView() {
     fetchNERRS, fetchHFRadar, fetchAQI, fetchGOESStatus,
     fetchEcologyStatus, fetchSatelliteStatus, fetchOceanStatus,
     fetchLandStatus, fetchAirPlusStatus,
+    lastFetchedAt,
   } = useStore()
 
   const [activeTab, setActiveTab] = useState('overview')
@@ -306,20 +317,20 @@ export default function ScienceView() {
       />
 
       <div className="grid grid-cols-3 md:grid-cols-9 gap-2 mb-5">
-        <StatBox label="Total Streamflow" value={totalFlow != null ? (totalFlow/1000).toFixed(1) : null} unit="K cfs" color="#3b82f6" sub={`${allFlow.length} USGS stations`} />
-        <StatBox label="CO-OPS Tide" value={coopsWL.length ? coopsWL[0].toFixed(2) : null} unit="ft MLLW" color="#1d6fcc" sub={`${coopsArr.length} tidal stations`} />
-        <StatBox label="GOES-19 SST" value={goesSst?.toFixed(1) || (goesImagery ? 'Imagery' : null)} unit={goesSst != null ? '°C' : ''} color="#1d6fcc" sub={goesSst != null ? 'Gulf hourly' : goesImagery ? 'SST offline · Imagery active' : 'Gulf hourly'} />
-        <StatBox label="Air Quality" value={aqiVal ?? (purpleAirAvg != null ? purpleAirAvg.toFixed(0) : null)} unit={aqiVal != null ? 'AQI' : purpleAirAvg != null ? 'PM2.5' : 'AQI'} color={aqiVal!=null&&aqiVal>100?'#dc2626':'#10b981'} sub={aqiCat || (purpleAirAvg != null ? `PurpleAir ${purpleAirSensors.length} sensors` : 'AirNow')} />
-        <StatBox label="PurpleAir PM2.5" value={purpleAirAvg?.toFixed(1)} unit="µg/m³" color={purpleAirAvg != null && purpleAirAvg > 12 ? '#dc2626' : '#3b82f6'} sub={`${purpleAirSensors.length} local sensors`} />
-        <StatBox label="Water Temp" value={allTemp.length?(allTemp.reduce((a,b)=>a+b,0)/allTemp.length).toFixed(1):coopsTemp.length?((coopsTemp.reduce((a,b)=>a+b,0)/coopsTemp.length-32)*5/9).toFixed(1):omTemp?.toFixed(1)} unit="°C" color="#f59e0b" sub={allTemp.length?`${allTemp.length} USGS`:coopsTemp.length?`${coopsTemp.length} CO-OPS`:'Open-Meteo'} />
-        <StatBox label="Wind" value={omWind?.toFixed(1)} unit={openMeteo?.current?.wind_ms != null ? "m/s" : "mph"} color="#3b82f6" sub={`Dir: ${safeNum(openMeteo?.current?.wind_dir) ?? '—'}°`} />
+        <StatBox label="Total Streamflow" value={totalFlow != null ? (totalFlow/1000).toFixed(1) : null} unit="K cfs" color="#3b82f6" sub={`${allFlow.length} USGS stations`} freshness={lastFetchedAt.water} />
+        <StatBox label="CO-OPS Tide" value={coopsWL.length ? coopsWL[0].toFixed(2) : null} unit="ft MLLW" color="#1d6fcc" sub={`${coopsArr.length} tidal stations`} freshness={lastFetchedAt.water} />
+        <StatBox label="GOES-19 SST" value={goesSst?.toFixed(1) || (goesImagery ? 'Imagery' : null)} unit={goesSst != null ? '°C' : ''} color="#1d6fcc" sub={goesSst != null ? 'Gulf hourly' : goesImagery ? 'SST offline · Imagery active' : 'Gulf hourly'} freshness={lastFetchedAt.goes} />
+        <StatBox label="Air Quality" value={aqiVal ?? (purpleAirAvg != null ? purpleAirAvg.toFixed(0) : null)} unit={aqiVal != null ? 'AQI' : purpleAirAvg != null ? 'PM2.5' : 'AQI'} color={aqiVal!=null&&aqiVal>100?'#dc2626':'#10b981'} sub={aqiCat || (purpleAirAvg != null ? `PurpleAir ${purpleAirSensors.length} sensors` : 'AirNow')} freshness={lastFetchedAt.aqi} />
+        <StatBox label="PurpleAir PM2.5" value={purpleAirAvg?.toFixed(1)} unit="µg/m³" color={purpleAirAvg != null && purpleAirAvg > 12 ? '#dc2626' : '#3b82f6'} sub={`${purpleAirSensors.length} local sensors`} freshness={lastFetchedAt.sensors} />
+        <StatBox label="Water Temp" value={allTemp.length?(allTemp.reduce((a,b)=>a+b,0)/allTemp.length).toFixed(1):coopsTemp.length?((coopsTemp.reduce((a,b)=>a+b,0)/coopsTemp.length-32)*5/9).toFixed(1):omTemp?.toFixed(1)} unit="°C" color="#f59e0b" sub={allTemp.length?`${allTemp.length} USGS`:coopsTemp.length?`${coopsTemp.length} CO-OPS`:'Open-Meteo'} freshness={lastFetchedAt.water} />
+        <StatBox label="Wind" value={omWind?.toFixed(1)} unit={openMeteo?.current?.wind_ms != null ? "m/s" : "mph"} color="#3b82f6" sub={`Dir: ${safeNum(openMeteo?.current?.wind_dir) ?? '—'}°`} freshness={lastFetchedAt.weather} />
         {allDO.length > 0 ? (
-          <StatBox label="Min DO₂" value={minDO?.toFixed(1)} unit="mg/L" color={doColor(minDO)} sub={`${allDO.length} sources`} />
+          <StatBox label="Min DO₂" value={minDO?.toFixed(1)} unit="mg/L" color={doColor(minDO)} sub={`${allDO.length} sources`} freshness={lastFetchedAt.water} />
         ) : (
-          <StatBox label="CAPE" value={omCape?.toFixed(0)} unit="J/kg" color={omCape!=null&&omCape>1000?'#dc2626':'#7c3aed'} sub="Convective" />
+          <StatBox label="CAPE" value={omCape?.toFixed(0)} unit="J/kg" color={omCape!=null&&omCape>1000?'#dc2626':'#7c3aed'} sub="Convective" freshness={lastFetchedAt.weather} />
         )}
         <StatBox label="HAB Risk" value={habAssessment?.hab?.probability} unit="%" color={habAssessment?.hab?.probability>=65?'#dc2626':'#0a9e80'}
-          sub={habAssessment?.hab?.riskLevel?<RiskBadge level={habAssessment.hab.riskLevel}/>:null} />
+          sub={habAssessment?.hab?.riskLevel?<RiskBadge level={habAssessment.hab.riskLevel}/>:null} freshness={lastFetchedAt.hab} />
       </div>
 
       <div className="flex gap-0 border-b border-bay-100 mb-4 overflow-x-auto">
