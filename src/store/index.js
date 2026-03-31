@@ -111,7 +111,10 @@ export const useStore = create((set, get) => ({
       const res = await fetch(`${API}/api/sensors/nerrs/latest`)
       const data = await res.json()
       set({ nerrs: data })
-    } catch (e) { console.error('[Store] NERRS fetch error:', e) }
+    } catch (e) {
+      console.error('[Store] NERRS fetch error:', e)
+      set({ nerrs: { waterQuality: { available: false, error: e.message }, meteorological: { available: false }, stationName: 'Weeks Bay NERR' } })
+    }
   },
 
   fetchHFRadar: async () => {
@@ -119,7 +122,10 @@ export const useStore = create((set, get) => ({
       const res = await fetch(`${API}/api/sensors/hfradar/summary`)
       const data = await res.json()
       set({ hfradar: data })
-    } catch (e) { console.error('[Store] HF Radar fetch error:', e) }
+    } catch (e) {
+      console.error('[Store] HF Radar fetch error:', e)
+      set({ hfradar: { available: false, error: e.message } })
+    }
   },
 
   fetchPACEStatus: async () => {

@@ -1,7 +1,8 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useStore } from '../store/index.js'
 import { PageHeader, Spinner, RiskBadge } from '../components/Common/index.jsx'
-import { AreaChart, Area, LineChart, Line, ScatterChart, Scatter, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ReferenceLine, ResponsiveContainer, Cell } from 'recharts'
+import { WeatherForecastChart, AirQualityChart, SatelliteTimelineChart, OceanConditionsChart } from '../components/Charts/index.jsx'
+import { AreaChart, Area, LineChart, Line, ScatterChart, Scatter, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ReferenceLine, ResponsiveContainer, Cell, Legend } from 'recharts'
 import clsx from 'clsx'
 
 const API = import.meta.env.VITE_API_BASE_URL || ''
@@ -18,12 +19,15 @@ const PARAMS = {
   pH:                { label:'pH',           unit:'',     color:'#7c3aed', warnLow:6.5, warnHigh:8.5 },
   turbidity_ntu:     { label:'Turbidity',    unit:'NTU',  color:'#d97706', warnHigh:10, critHigh:25 },
   conductance_us_cm: { label:'Conductance',  unit:'µS/cm',color:'#1d6fcc' },
-  total_nitrogen_mg_l:{ label:'Nitrogen',   unit:'mg/L', color:'#dc2626', warnHigh:1.5 },
+  salinity_ppt:      { label:'Salinity',     unit:'ppt',  color:'#7c3aed' },
+  chlorophyll_ugl:   { label:'Chlorophyll',  unit:'µg/L', color:'#16a34a', warnHigh:20, critHigh:40 },
 }
 
 const USGS_SITES = {
   '02428400':'Alabama River at Claiborne',
   '02469761':'Mobile River at I-65',
+  '02469800':'Mobile River near Bucks',
+  '02471078':'Escatawpa River',
   '02479000':'Dog River near Mobile',
   '02479155':'Fowl River',
 }
@@ -74,14 +78,38 @@ const CustomTooltip = ({ active, payload, label }) => {
   )
 }
 
+function SectionLabel({ title, badge }) {
+  return (
+    <div className="flex items-center gap-2 mb-3 mt-5">
+      <div className="tw-mono text-[9px] font-bold tracking-[0.15em] text-bay-400 uppercase">{title}</div>
+      {badge && <span className="tw-mono text-[8px] px-1.5 py-0.5 rounded font-bold bg-teal-50 text-teal-700 border border-teal-100">{badge}</span>}
+    </div>
+  )
+}
+
 export default function ScienceView() {
-  const { waterQuality, habAssessment, fetchAll, loading } = useStore()
+  const {
+    waterQuality, habAssessment, fetchAll, loading, weather,
+    nerrs, hfradar, aqi, goesStatus, ecologyStatus, sensors,
+    satelliteStatus, oceanStatus, landStatus, airplusStatus,
+    fetchNERRS, fetchHFRadar, fetchAQI, fetchGOESStatus,
+    fetchEcologyStatus, fetchSatelliteStatus, fetchOceanStatus,
+    fetchLandStatus, fetchAirPlusStatus,
+  } = useStore()
+
   const [activeTab, setActiveTab] = useState('overview')
   const [selectedSite, setSelectedSite] = useState('02479000')
   const [selectedParam, setSelectedParam] = useState('do_mg_l')
   const [histData, setHistData] = useState([])
   const [histLoading, setHistLoading] = useState(false)
   const [histDays, setHistDays] = useState(7)
+
+  useEffect(() => {
+    fetchAll()
+    fetchNERRS(); fetchHFRadar(); fetchAQI(); fetchGOESStatus()
+    fetchEcologyStatus(); fetchSatelliteStatus(); fetchOceanStatus()
+    fetchLandStatus(); fetchAirPlusStatus()
+  }, [])
 
   const loadHistorical = useCallback(async () => {
     const paramCode = PARAM_CODES[selectedParam]
@@ -98,11 +126,86 @@ export default function ScienceView() {
   useEffect(() => { loadHistorical() }, [loadHistorical])
 
   const usgs = waterQuality?.usgs || []
-  const allDO = usgs.map(s=>safeNum(s.readings?.do_mg_l)).filter(v=>v!=null)
-  const allTemp = usgs.map(s=>safeNum(s.readings?.water_temp_c)).filter(v=>v!=null)
+  const coops = waterQuality?.coops || {}
+
+  const nDO = safeNum(nerrs?.waterQuality?.latest?.DO_mgl?.value)
+  const nTemp = safeNum(nerrs?.waterQuality?.latest?.Temp?.value)
+  const nSal = safeNum(nerrs?.waterQuality?.latest?.Sal?.value)
+  const nChl = safeNum(nerrs?.waterQuality?.latest?.ChlFluor?.value)
+  const nTurb = safeNum(nerrs?.waterQuality?.latest?.Turb?.value)
+  const nPH = safeNum(nerrs?.waterQuality?.latest?.pH?.value)
+  const nSpCond = safeNum(nerrs?.waterQuality?.latest?.SpCond?.value)
+  const nerrsOk = nerrs?.waterQuality?.available
+  const nerrsAttempted = nerrs != null
+
+  const allDO = [...usgs.map(s=>safeNum(s.readings?.do_mg_l)).filter(v=>v!=null), ...(nDO!=null?[nDO]:[])]
+  const allTemp = [...usgs.map(s=>safeNum(s.readings?.water_temp_c)).filter(v=>v!=null), ...(nTemp!=null?[nTemp]:[])]
   const minDO = allDO.length ? Math.min(...allDO) : null
   const avgDO = allDO.length ? allDO.reduce((a,b)=>a+b,0)/allDO.length : null
   const maxDO = allDO.length ? Math.max(...allDO) : null
+
+  const goesSst = safeNum(goesStatus?.status?.latestSST_C)
+  const goesImagery = goesStatus?.imagery?.available || goesStatus?.status?.imageryAvailable
+  const aqiVal = aqi?.readings?.[0]?.aqi
+  const aqiCat = aqi?.readings?.[0]?.category
+
+  const hfOk = hfradar?.available
+  const hfSpeed = safeNum(hfradar?.avgSpeed_ms)
+  const hfDir = hfradar?.directionCardinal
+  const hfDist14 = safeNum(hfradar?.bloom_transport?.distance_14h_km)
+  const hfDist24 = safeNum(hfradar?.bloom_transport?.distance_24h_km)
+
+  const inatCount = ecologyStatus?.iNaturalist?.totalCount
+  const gbifCount = ecologyStatus?.gbif?.totalCount
+  const ebirdObs = ecologyStatus?.eBird?.mobileBayObs ?? ecologyStatus?.eBird?.totalAlabamaObs
+  const ebirdSpecies = ecologyStatus?.eBird?.species?.length
+
+  const openMeteo = landStatus?.openMeteo
+  const omTemp = safeNum(openMeteo?.current?.temp_c) ?? safeNum(weather?.current?.temp_c)
+  const omWind = safeNum(openMeteo?.current?.wind_ms) ?? safeNum(weather?.current?.wind_mph)
+  const omCape = safeNum(openMeteo?.current?.cape)
+
+  const purpleAirSensors = airplusStatus?.purpleAir?.sensors || []
+  const validPM25 = purpleAirSensors.map(s => safeNum(s.pm25)).filter(v => v != null)
+  const purpleAirAvg = validPM25.length
+    ? validPM25.reduce((sum, v) => sum + v, 0) / validPM25.length
+    : safeNum(airplusStatus?.purpleAir?.avgPM25)
+
+  const hycomActive = oceanStatus?.hycom?.available
+  const cmemsActive = oceanStatus?.cmems?.available
+
+  const forecastData = openMeteo?.dailyForecast?.map(d => {
+    const dayName = d.date ? new Date(d.date + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'short' }) : '?'
+    return { day: dayName, high: d.high_c != null ? Math.round(d.high_c * 9/5 + 32) : null, low: d.low_c != null ? Math.round(d.low_c * 9/5 + 32) : null, precipChance: d.precipProb || 0 }
+  }) || []
+
+  const satChartData = (() => {
+    if (!satelliteStatus) return []
+    const items = [
+      { name: 'MODIS CHL', granules: satelliteStatus.modis?.granules || 0, available: satelliteStatus.modis?.available },
+      { name: 'VIIRS OC', granules: satelliteStatus.viirs?.granules || 0, available: satelliteStatus.viirs?.available },
+      { name: 'HLS', granules: (satelliteStatus.hls?.HLSL30?.granules||0) + (satelliteStatus.hls?.HLSS30?.granules||0), available: satelliteStatus.hls?.available },
+      { name: 'Landsat', granules: satelliteStatus.landsat?.granules || 0, available: satelliteStatus.landsat?.available },
+      { name: 'Sentinel-2', granules: satelliteStatus.sentinel2?.granules || 0, available: satelliteStatus.sentinel2?.available },
+    ]
+    if (satelliteStatus.goes?.status?.available || satelliteStatus.goes?.status?.imageryAvailable) items.push({ name: 'GOES-19', granules: 1, available: true })
+    return items
+  })()
+
+  const aqiChartData = (() => {
+    const airNowPM25 = aqi?.readings?.find(r => (r.parameter||'').includes('PM2.5'))?.aqi
+    const airNowO3 = aqi?.readings?.find(r => (r.parameter||'').includes('O3') || (r.parameter||'').includes('Ozone'))?.aqi
+    const openAQPM25 = safeNum(airplusStatus?.openAQ?.avgPM25)
+    const purpleAirPM25 = safeNum(airplusStatus?.purpleAir?.avgPM25)
+    const epaAQSVal = safeNum(airplusStatus?.epaAQS?.avgValue)
+    const hasMulti = openAQPM25 != null || purpleAirPM25 != null || epaAQSVal != null
+    if (hasMulti) return [
+      { parameter: 'PM2.5', airNow: airNowPM25 || null, openAQ: openAQPM25, purpleAir: purpleAirPM25, epaAQS: epaAQSVal },
+      ...(airNowO3 ? [{ parameter: 'Ozone', airNow: airNowO3 }] : []),
+    ]
+    if (!aqi?.readings?.length) return []
+    return aqi.readings.map(r => ({ parameter: r.parameter || 'AQI', aqi: r.aqi || 0, category: r.category || '' }))
+  })()
 
   const comparisonData = usgs.filter(s=>safeNum(s.readings?.[selectedParam])!=null).map(s=>({
     name: s.name.split(' at ')[0].split(' near ')[0].substring(0,14),
@@ -130,49 +233,77 @@ export default function ScienceView() {
   }
 
   const exportAllCSV = () => {
-    const rows = [['station','siteNo','parameter','value','unit','timestamp']]
+    const rows = [['source','station','parameter','value','unit','timestamp']]
     usgs.forEach(s=>{
       Object.entries(s.readings||{}).forEach(([param,reading])=>{
         const v = safeNum(reading)
         const meta = PARAMS[param]
-        if(v!=null) rows.push([s.name, s.siteNo, meta?.label||param, v, meta?.unit||'', s.timestamp||''])
+        if(v!=null) rows.push(['USGS', s.name, meta?.label||param, v, meta?.unit||'', s.timestamp||''])
       })
     })
+    if (nerrsOk && nerrs?.waterQuality?.latest) {
+      Object.entries(nerrs.waterQuality.latest).forEach(([k, v]) => {
+        const val = safeNum(v.value)
+        if (val != null) rows.push(['NERRS Weeks Bay', 'Weeks Bay', v.label || k, val, v.unit || '', nerrs.waterQuality.latestTimestamp || ''])
+      })
+    }
+    Object.values(coops).forEach(s => {
+      if (safeNum(s.water_level) != null) rows.push(['CO-OPS', s.name, 'Water Level', safeNum(s.water_level), 'ft MLLW', ''])
+      if (safeNum(s.water_temperature) != null) rows.push(['CO-OPS', s.name, 'Temperature', safeNum(s.water_temperature), '°F', ''])
+      if (safeNum(s.salinity) != null) rows.push(['CO-OPS', s.name, 'Salinity', safeNum(s.salinity), 'ppt', ''])
+    })
+    if (goesSst != null) rows.push(['GOES-19', 'Gulf of Mexico', 'SST', goesSst, '°C', ''])
+    if (aqiVal != null) rows.push(['AirNow', 'Mobile Bay', 'AQI', aqiVal, '', ''])
+    if (hfSpeed != null) rows.push(['HF Radar', 'Gulf Surface', 'Current Speed', hfSpeed, 'm/s', ''])
+    if (omTemp != null) rows.push(['Open-Meteo', 'Mobile Bay', 'Air Temp', omTemp, '°C', ''])
+    if (inatCount != null) rows.push(['iNaturalist', 'Mobile Bay', 'Observations', inatCount, '', ''])
+    if (gbifCount != null) rows.push(['GBIF', 'Mobile Bay', 'Occurrences', gbifCount, '', ''])
+    if (ebirdObs != null) rows.push(['eBird', 'Alabama', 'Observations', ebirdObs, '', ''])
+    purpleAirSensors.forEach(s => {
+      if (s.pm25 != null) rows.push(['PurpleAir', s.name, 'PM2.5', s.pm25, 'µg/m³', s.lastSeen ? new Date(s.lastSeen * 1000).toISOString() : ''])
+    })
+    if (omCape != null) rows.push(['Open-Meteo', 'Mobile Bay', 'CAPE', omCape, 'J/kg', ''])
+    if (omWind != null) rows.push(['Open-Meteo', 'Mobile Bay', 'Wind Speed', omWind, openMeteo?.current?.wind_ms != null ? 'm/s' : 'mph', ''])
+
     const csv = rows.map(r=>r.join(',')).join('\n')
     const blob = new Blob([csv],{type:'text/csv'})
     const a = document.createElement('a')
     a.href = URL.createObjectURL(blob)
-    a.download = `terrawatch_all_stations_snapshot.csv`
+    a.download = `terrawatch_all_sources_snapshot.csv`
     a.click()
   }
 
   const TABS = ['overview','time series','station compare','correlation','export']
 
+  const totalSources = (sensors?.summary?.active || 0)
+
   return (
     <div className="p-5 max-w-7xl animate-in">
       <PageHeader icon="⬢" title="Science View"
-        subtitle="Multi-station analysis · Historical trends · Statistical summary · Data export"
+        subtitle={`Multi-source analysis · ${totalSources} active feeds · Historical trends · Statistical summary · Data export`}
         badge="SCIENTIST TOOLS"
         actions={
           <div className="flex items-center gap-2">
             <button onClick={exportAllCSV} className="text-xs px-3 py-1.5 rounded-lg border font-semibold text-emerald-700 border-emerald-300 bg-emerald-50 hover:bg-emerald-100 transition-colors">
               ↓ Export All CSV
             </button>
-            <button onClick={fetchAll} disabled={loading.water} className="tw-btn-primary disabled:opacity-50">
+            <button onClick={()=>{fetchAll();fetchNERRS();fetchHFRadar();fetchAQI();fetchGOESStatus();fetchEcologyStatus();fetchSatelliteStatus();fetchOceanStatus();fetchLandStatus();fetchAirPlusStatus()}} disabled={loading.water} className="tw-btn-primary disabled:opacity-50">
               {loading.water?<Spinner size={14}/>:'↺'} Refresh
             </button>
           </div>
         }
       />
 
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-2 mb-5">
+      <div className="grid grid-cols-3 md:grid-cols-7 gap-2 mb-5">
         <div className="tw-card flex flex-col items-center py-3 col-span-1">
           <DoGauge value={minDO} />
-          <div className="text-[9px] text-bay-400 mt-1">Network Minimum</div>
+          <div className="text-[9px] text-bay-400 mt-1">Network Min (incl. NERRS)</div>
         </div>
-        <StatBox label="Network Avg DO₂" value={avgDO?.toFixed(1)} unit="mg/L" color={doColor(avgDO)} sub={`${allDO.length} stations`} />
-        <StatBox label="Network Max DO₂" value={maxDO?.toFixed(1)} unit="mg/L" color="#10b981" />
-        <StatBox label="Avg Water Temp" value={allTemp.length?(allTemp.reduce((a,b)=>a+b,0)/allTemp.length).toFixed(1):null} unit="°C" color="#f59e0b" sub={`${allTemp.length} stations`} />
+        <StatBox label="Network Avg DO₂" value={avgDO?.toFixed(1)} unit="mg/L" color={doColor(avgDO)} sub={`${allDO.length} sources`} />
+        <StatBox label="NERRS DO₂" value={nDO?.toFixed(1)} unit="mg/L" color={doColor(nDO)} sub="Weeks Bay" />
+        <StatBox label="GOES-19 SST" value={goesSst?.toFixed(1) || (goesImagery ? 'Imagery' : null)} unit={goesSst != null ? '°C' : ''} color="#1d6fcc" sub={goesSst != null ? 'Gulf hourly' : goesImagery ? 'SST offline · Imagery active' : 'Gulf hourly'} />
+        <StatBox label="Air Quality" value={aqiVal ?? (purpleAirAvg != null ? purpleAirAvg.toFixed(0) : null)} unit={aqiVal != null ? 'AQI' : purpleAirAvg != null ? 'PM2.5' : 'AQI'} color={aqiVal!=null&&aqiVal>100?'#dc2626':'#10b981'} sub={aqiCat || (purpleAirAvg != null ? `PurpleAir ${purpleAirSensors.length} sensors` : 'AirNow')} />
+        <StatBox label="Avg Water Temp" value={allTemp.length?(allTemp.reduce((a,b)=>a+b,0)/allTemp.length).toFixed(1):omTemp?.toFixed(1)} unit="°C" color="#f59e0b" sub={allTemp.length?`${allTemp.length} sources`:'Open-Meteo'} />
         <StatBox label="HAB Probability" value={habAssessment?.hab?.probability} unit="%" color={habAssessment?.hab?.probability>=65?'#dc2626':'#0a9e80'}
           sub={habAssessment?.hab?.riskLevel?<RiskBadge level={habAssessment.hab.riskLevel}/>:null} />
       </div>
@@ -189,6 +320,37 @@ export default function ScienceView() {
 
       {activeTab==='overview' && (
         <div className="space-y-4">
+          <SectionLabel title="NERRS Weeks Bay — 15-min Water Quality" badge={nerrsOk ? 'LIVE' : nerrsAttempted ? 'CDMO OFFLINE' : 'LOADING'} />
+          <div className="tw-card border-emerald-200" style={{background:'linear-gradient(135deg,#f5fbf8 0%,#ecfdf5 100%)'}}>
+            <div className="flex items-center gap-2 mb-3">
+              <div className={clsx('w-2.5 h-2.5 rounded-full flex-shrink-0', nerrsOk ? 'bg-emerald-500 animate-pulse' : nerrsAttempted ? 'bg-amber-400' : 'bg-gray-300')}/>
+              <div className="font-bold text-sm text-bay-800 flex-1">Weeks Bay NERR — {nerrsOk ? 'Live Readings' : nerrsAttempted ? 'Service Temporarily Unavailable' : 'Connecting...'}</div>
+              {nerrsOk && <div className="tw-mono text-[9px] text-bay-300">{nerrs.waterQuality.latestTimestamp}</div>}
+            </div>
+            {nerrsAttempted && !nerrsOk && (
+              <div className="text-xs text-amber-600 bg-amber-50 border border-amber-100 rounded-lg p-2 mb-3">
+                CDMO API returned an error. NERRS Weeks Bay data will auto-recover when the service is restored. This station monitors DO₂, Temperature, Salinity, Chlorophyll, Turbidity, pH, and Specific Conductance at 15-minute intervals.
+              </div>
+            )}
+            <div className="grid grid-cols-4 md:grid-cols-7 gap-2">
+              {[
+                {l:'DO₂', v:nDO, u:'mg/L', c:doColor(nDO), alert:nDO!=null&&nDO<4},
+                {l:'Temp', v:nTemp, u:'°C', c:'#f59e0b'},
+                {l:'Salinity', v:nSal, u:'ppt', c:'#7c3aed'},
+                {l:'Chlorophyll', v:nChl, u:'µg/L', c:'#16a34a', alert:nChl!=null&&nChl>20},
+                {l:'Turbidity', v:nTurb, u:'NTU', c:'#d97706', alert:nTurb!=null&&nTurb>25},
+                {l:'pH', v:nPH, u:'', c:'#7c3aed'},
+                {l:'SpCond', v:nSpCond, u:'mS/cm', c:'#1d6fcc'},
+              ].map(({l,v,u,c,alert:a})=>(
+                <div key={l} className={clsx('rounded-lg p-2 text-center', a?'bg-red-50 border border-red-200':'bg-white/70')}>
+                  <div className="tw-label mb-0.5">{l}</div>
+                  <div className="tw-mono text-sm font-bold" style={{color:v!=null?c:'#aed0c2'}}>{v!=null?v.toFixed(2):'—'}{v!=null&&u&&<span className="text-[9px] font-normal text-bay-400 ml-0.5">{u}</span>}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <SectionLabel title="USGS Water Stations" badge={`${usgs.length} stations`} />
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             {usgs.map(s=>{
               const do2=safeNum(s.readings?.do_mg_l)
@@ -196,11 +358,12 @@ export default function ScienceView() {
               const flow=safeNum(s.readings?.streamflow_cfs)
               const pH=safeNum(s.readings?.pH)
               const turb=safeNum(s.readings?.turbidity_ntu)
+              const cond=safeNum(s.readings?.conductance_us_cm)
               const alert=do2!=null&&do2<4
               return (
                 <div key={s.siteNo} className={clsx('tw-card',alert&&'border-red-200')} style={alert?{background:'#fef2f2'}:{}}>
                   <div className="flex items-center gap-2 mb-3">
-                    <div className={clsx('w-2.5 h-2.5 rounded-full flex-shrink-0',alert?'bg-red-500 animate-pulse':'bg-emerald-500')}/>
+                    <div className={clsx('w-2.5 h-2.5 rounded-full flex-shrink-0',alert?'bg-red-500 animate-pulse':flow!=null||do2!=null||temp!=null?'bg-emerald-500':'bg-amber-400')}/>
                     <div className="font-bold text-sm text-bay-800 flex-1">{s.name}</div>
                     <div className="tw-mono text-[9px] text-bay-300">{s.siteNo}</div>
                   </div>
@@ -211,7 +374,7 @@ export default function ScienceView() {
                       {l:'Flow',v:flow?(flow/1000).toFixed(1):null,u:'K cfs',c:'#3b82f6'},
                       {l:'pH',v:pH?.toFixed(2),u:'',c:'#7c3aed'},
                       {l:'Turbidity',v:turb?.toFixed(1),u:'NTU',c:'#d97706'},
-                      {l:'Updated',v:s.timestamp?fmtTime(s.timestamp):null,u:'',c:'#8aadaa'},
+                      {l:'Conductance',v:cond?cond.toFixed(0):null,u:'µS/cm',c:'#1d6fcc'},
                     ].map(({l,v,u,c,alert:a})=>(
                       <div key={l} className={clsx('rounded-lg p-2 text-center',a?'bg-red-50':'bg-bay-50')}>
                         <div className="tw-label mb-0.5">{l}</div>
@@ -225,10 +388,10 @@ export default function ScienceView() {
             {usgs.length===0&&<div className="tw-card text-center py-8 text-bay-400 text-sm">Loading station data...</div>}
           </div>
 
+          <SectionLabel title="NOAA CO-OPS Tidal Stations" badge={`${Object.keys(coops).length} stations`} />
           <div className="tw-card">
-            <div className="tw-label mb-3">NOAA CO-OPS Tidal Stations</div>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-              {Object.values(waterQuality?.coops||{}).map(s=>(
+              {Object.values(coops).map(s=>(
                 <div key={s.id} className="p-3 rounded-lg bg-bay-50">
                   <div className="font-semibold text-sm text-bay-800 mb-2">{s.name}</div>
                   {[{l:'Water Level',v:safeNum(s.water_level),u:'ft MLLW',c:'#1d6fcc'},{l:'Temp',v:safeNum(s.water_temperature),u:'°F',c:'#f59e0b'},{l:'Salinity',v:safeNum(s.salinity),u:'ppt',c:'#7c3aed'}].map(({l,v,u,c})=>(
@@ -240,6 +403,119 @@ export default function ScienceView() {
                 </div>
               ))}
             </div>
+          </div>
+
+          <SectionLabel title="Ocean Conditions & Currents" badge={hfOk ? 'LIVE' : hycomActive || goesImagery ? 'PARTIAL' : 'LOADING'} />
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <div className="tw-card">
+              <div className="tw-label mb-1">GOES-19 SST</div>
+              <div className="tw-mono text-2xl font-bold text-blue-600">{goesSst?.toFixed(1) ?? '—'}<span className="text-xs font-normal text-bay-400 ml-1">°C</span></div>
+              <div className="text-[10px] text-bay-400 mt-1">{goesSst != null ? 'Gulf of Mexico · Hourly' : goesImagery ? 'SST ERDDAP offline · Imagery active' : 'Gulf of Mexico · Hourly'}</div>
+              {goesImagery && !goesSst && <div className="text-[9px] text-emerald-600 mt-0.5">GEOCOLOR imagery streaming</div>}
+            </div>
+            <div className="tw-card">
+              <div className="tw-label mb-1">Current Speed</div>
+              <div className="tw-mono text-2xl font-bold text-teal-700">{hfSpeed?.toFixed(2) ?? '—'}<span className="text-xs font-normal text-bay-400 ml-1">m/s</span></div>
+              <div className="text-[10px] text-bay-400 mt-1">{hfDir ? `Direction: ${hfDir}` : hfOk ? 'HF Radar' : 'HF Radar ERDDAP offline'}</div>
+            </div>
+            <div className="tw-card">
+              <div className="tw-label mb-1">Bloom Transport 14h</div>
+              <div className="tw-mono text-2xl font-bold text-amber-600">{hfDist14?.toFixed(0) ?? '—'}<span className="text-xs font-normal text-bay-400 ml-1">km</span></div>
+              <div className="text-[10px] text-bay-400 mt-1">24h: {hfDist24?.toFixed(0) ?? '—'} km</div>
+            </div>
+            <div className="tw-card">
+              <div className="tw-label mb-1">HYCOM Ocean Model</div>
+              <div className="tw-mono text-lg font-bold" style={{color:hycomActive?'#10b981':'#aed0c2'}}>{hycomActive?'Active':'—'}</div>
+              <div className="text-[10px] text-bay-400 mt-1">{oceanStatus?.hycom?.product || '1/12° global model'}</div>
+            </div>
+          </div>
+          {(hycomActive || cmemsActive) && (
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+              {cmemsActive && <StatBox label="CMEMS Copernicus" value="Active" color="#10b981" sub="Marine service" />}
+              {hycomActive && <StatBox label="HYCOM 1/12°" value="Active" color="#10b981" sub="Global ocean model" />}
+              {oceanStatus?.streamstats?.available && <StatBox label="USGS StreamStats" value="Active" color="#10b981" sub="Watershed delineation" />}
+            </div>
+          )}
+
+          <SectionLabel title="Atmospheric & Weather" badge={omTemp!=null?'LIVE':'LOADING'} />
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+            <StatBox label="Air Temp" value={omTemp?.toFixed(1)} unit="°C" color="#f59e0b" sub="Open-Meteo" />
+            <StatBox label="Wind" value={omWind?.toFixed(1)} unit={openMeteo?.current?.wind_ms != null ? "m/s" : "mph"} color="#3b82f6" sub={`Dir: ${safeNum(openMeteo?.current?.wind_dir) ?? '—'}°`} />
+            <StatBox label="CAPE" value={omCape?.toFixed(0)} unit="J/kg" color={omCape!=null&&omCape>1000?'#dc2626':'#7c3aed'} sub={omCape!=null&&omCape>1500?'Severe risk':omCape!=null&&omCape>500?'Moderate instability':'Convective potential'} />
+            <StatBox label="AQI" value={aqiVal} unit="" color={aqiVal!=null&&aqiVal>100?'#dc2626':'#10b981'} sub={aqiCat || 'AirNow'} />
+            <StatBox label="PurpleAir PM2.5" value={purpleAirAvg?.toFixed(1) ?? safeNum(airplusStatus?.openAQ?.avgPM25)?.toFixed(1)} unit="µg/m³" color={purpleAirAvg != null && purpleAirAvg > 12 ? '#dc2626' : '#3b82f6'} sub={purpleAirSensors.length ? `${purpleAirSensors.length} local sensors` : 'Loading...'} />
+          </div>
+          {purpleAirSensors.length > 0 && (
+            <div className="tw-card">
+              <div className="tw-label mb-2">PurpleAir Hyperlocal PM2.5 — {purpleAirSensors.length} Sensors</div>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                {purpleAirSensors.slice(0, 8).map((s, i) => (
+                  <div key={i} className="rounded-lg p-2 bg-bay-50 text-center">
+                    <div className="text-[10px] text-bay-500 truncate">{s.name}</div>
+                    <div className="tw-mono text-sm font-bold" style={{color: s.pm25 > 12 ? '#dc2626' : s.pm25 > 6 ? '#f59e0b' : '#10b981'}}>{s.pm25?.toFixed(1)}<span className="text-[9px] font-normal text-bay-400 ml-0.5">µg/m³</span></div>
+                    <div className="text-[9px] text-bay-300">{s.humidity}% RH · {s.temp_f}°F</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {forecastData.length > 0 && (
+            <div className="tw-card">
+              <div className="tw-label mb-3">7-Day Forecast — Open-Meteo (Mobile Bay)</div>
+              <WeatherForecastChart data={forecastData} />
+            </div>
+          )}
+
+          {aqiChartData.length > 0 && (
+            <div className="tw-card">
+              <div className="tw-label mb-3">Air Quality — Multi-Source Comparison</div>
+              <AirQualityChart data={aqiChartData} />
+            </div>
+          )}
+
+          <SectionLabel title="Ecology & Biodiversity" badge={inatCount!=null?'LIVE':'LOADING'} />
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <div className="tw-card">
+              <div className="tw-label mb-1">🦎 iNaturalist</div>
+              <div className="tw-mono text-2xl font-bold text-emerald-700">{inatCount?.toLocaleString() ?? '—'}</div>
+              <div className="text-[10px] text-bay-400 mt-1">observations ({ecologyStatus?.iNaturalist?.daysBack || 7}d)</div>
+            </div>
+            <div className="tw-card">
+              <div className="tw-label mb-1">🌍 GBIF</div>
+              <div className="tw-mono text-2xl font-bold text-blue-700">{gbifCount?.toLocaleString() ?? '—'}</div>
+              <div className="text-[10px] text-bay-400 mt-1">species occurrences (90d)</div>
+            </div>
+            <div className="tw-card">
+              <div className="tw-label mb-1">🐦 eBird</div>
+              <div className="tw-mono text-2xl font-bold text-amber-700">{ebirdObs ?? '—'}</div>
+              <div className="text-[10px] text-bay-400 mt-1">{ebirdSpecies ?? '—'} species detected</div>
+            </div>
+            <div className="tw-card">
+              <div className="tw-label mb-1">🏗️ AmeriFlux</div>
+              <div className="tw-mono text-lg font-bold" style={{color:ecologyStatus?.ameriflux?.configured?'#10b981':'#aed0c2'}}>{ecologyStatus?.ameriflux?.configured?'Active':'—'}</div>
+              <div className="text-[10px] text-bay-400 mt-1">{ecologyStatus?.ameriflux?.nearestSite || 'CO₂/CH₄ flux'}</div>
+            </div>
+          </div>
+
+          <SectionLabel title="Satellite & Remote Sensing" badge={`${satelliteStatus?.totalSources || 0} sources`} />
+          {satChartData.length > 0 && (
+            <div className="tw-card">
+              <div className="tw-label mb-3">Satellite Granule Availability — Recent</div>
+              <SatelliteTimelineChart data={satChartData} />
+            </div>
+          )}
+
+          <SectionLabel title="Land, Regulatory & Watershed" badge={landStatus ? `${landStatus.totalSources || 0} sources` : 'LOADING'} />
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <StatBox label="Open-Meteo" value={landStatus?.openMeteo?.available ? 'Active' : '—'} color={landStatus?.openMeteo?.available ? '#10b981' : '#aed0c2'} sub="7-day forecast" />
+            <StatBox label="FEMA FIRM" value={landStatus?.fema?.available ? (landStatus.fema.inFloodZone ? 'Flood Zone' : 'No Zone') : '—'} color={landStatus?.fema?.available ? (landStatus.fema.inFloodZone ? '#dc2626' : '#10b981') : '#aed0c2'} sub="Flood risk assessment" />
+            <StatBox label="EPA ATTAINS" value={landStatus?.attains?.available ? 'Active' : '—'} color={landStatus?.attains?.available ? '#10b981' : '#aed0c2'} sub={landStatus?.attains?.data?.items?.[0]?.assessmentUnitCount != null ? `${landStatus.attains.data.items[0].assessmentUnitCount} units` : 'Impaired waters'} />
+            <StatBox label="USACE ORM" value={landStatus?.usace?.available ? 'Active' : '—'} color={landStatus?.usace?.available ? '#10b981' : '#aed0c2'} sub="§404 permits" />
+            <StatBox label="NWI Wetlands" value={landStatus?.nwi?.available ? 'Active' : '—'} color={landStatus?.nwi?.available ? '#10b981' : '#aed0c2'} sub="USFWS inventory" />
+            <StatBox label="SSURGO Soils" value={landStatus?.ssurgo?.available ? 'Active' : '—'} color={landStatus?.ssurgo?.available ? '#10b981' : '#aed0c2'} sub="Hydric soils" />
+            <StatBox label="NLCD 2021" value={landStatus?.nlcd?.available ? 'Active' : '—'} color={landStatus?.nlcd?.available ? '#10b981' : '#aed0c2'} sub="Land cover" />
+            <StatBox label="AHPS Flood" value={landStatus?.ahps?.available ? 'Active' : '—'} color={landStatus?.ahps?.available ? '#3b82f6' : '#aed0c2'} sub="NOAA flood stage" />
           </div>
         </div>
       )}
@@ -295,7 +571,7 @@ export default function ScienceView() {
 
           <div className="tw-card">
             <div className="flex items-center justify-between mb-3">
-              <div className="tw-label">{USGS_SITES[selectedSite]} — {pmeta?.label} — {histDays}d</div>
+              <div className="tw-label">{USGS_SITES[selectedSite] || selectedSite} — {pmeta?.label} — {histDays}d</div>
               {histLoading&&<Spinner size={16}/>}
             </div>
             {histData.length ? (
@@ -373,71 +649,86 @@ export default function ScienceView() {
             </div>
           </div>
 
-          {comparisonData.length ? (
-            <>
-              <div className="tw-card">
-                <div className="flex items-center justify-between mb-3">
-                  <div className="tw-label">{pmeta?.label} — All Stations — Current Reading</div>
-                  {pmeta?.critLow&&<div className="text-[10px] text-red-600 tw-mono">Critical: &lt;{pmeta.critLow} {pmeta.unit}</div>}
-                  {pmeta?.warnLow&&<div className="text-[10px] text-amber-600 tw-mono">Warn: &lt;{pmeta.warnLow} {pmeta.unit}</div>}
-                </div>
-                <ResponsiveContainer width="100%" height={Math.max(180,comparisonData.length*48)}>
-                  <BarChart data={comparisonData} layout="vertical" margin={{top:0,right:40,bottom:0,left:10}}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#e2f0ea" horizontal={false}/>
-                    <XAxis type="number" tick={{fontSize:9,fill:'#4a7060',fontFamily:'JetBrains Mono'}} unit={pmeta?.unit?` ${pmeta.unit}`:''}/>
-                    <YAxis type="category" dataKey="name" tick={{fontSize:10,fill:'#4a7060'}} width={110}/>
-                    <Tooltip content={<CustomTooltip/>}/>
-                    {pmeta?.critLow&&<ReferenceLine x={pmeta.critLow} stroke="#dc2626" strokeDasharray="4 2"/>}
-                    {pmeta?.warnLow&&<ReferenceLine x={pmeta.warnLow} stroke="#f59e0b" strokeDasharray="4 2"/>}
-                    <Bar dataKey="value" name={pmeta?.label} radius={[0,4,4,0]}>
-                      {comparisonData.map((d,i)=>(
-                        <Cell key={i} fill={selectedParam==='do_mg_l'?doColor(d.value):pmeta?.color||'#0a9e80'}/>
-                      ))}
-                    </Bar>
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
+          {(() => {
+            const allCompare = [...comparisonData]
+            if (selectedParam === 'do_mg_l' && nDO != null) allCompare.push({ name: 'NERRS Weeks Bay', value: nDO, siteNo: 'NERRS' })
+            if (selectedParam === 'water_temp_c' && nTemp != null) allCompare.push({ name: 'NERRS Weeks Bay', value: nTemp, siteNo: 'NERRS' })
+            if (selectedParam === 'water_temp_c' && goesSst != null) allCompare.push({ name: 'GOES-19 SST', value: goesSst, siteNo: 'GOES' })
+            if (selectedParam === 'pH' && nPH != null) allCompare.push({ name: 'NERRS Weeks Bay', value: nPH, siteNo: 'NERRS' })
+            if (selectedParam === 'turbidity_ntu' && nTurb != null) allCompare.push({ name: 'NERRS Weeks Bay', value: nTurb, siteNo: 'NERRS' })
+            if (selectedParam === 'salinity_ppt' && nSal != null) allCompare.push({ name: 'NERRS Weeks Bay', value: nSal, siteNo: 'NERRS' })
+            if (selectedParam === 'chlorophyll_ugl' && nChl != null) allCompare.push({ name: 'NERRS Weeks Bay', value: nChl, siteNo: 'NERRS' })
+            if (selectedParam === 'conductance_us_cm' && nSpCond != null) allCompare.push({ name: 'NERRS Weeks Bay', value: nSpCond * 1000, siteNo: 'NERRS' })
 
-              <div className="tw-card">
-                <div className="tw-label mb-2">Ranked — {pmeta?.label}</div>
-                {[...comparisonData].sort((a,b)=>a.value-b.value).map((d,i)=>{
-                  const pct=(d.value/(Math.max(...comparisonData.map(x=>x.value))||1))*100
-                  const color=selectedParam==='do_mg_l'?doColor(d.value):pmeta?.color||'#0a9e80'
-                  return (
-                    <div key={d.siteNo} className="py-2 border-b border-bay-50 last:border-0">
-                      <div className="flex items-center gap-3 mb-1">
-                        <span className="tw-mono text-[10px] text-bay-300 w-4">#{i+1}</span>
-                        <span className="text-sm text-bay-700 flex-1">{d.name}</span>
-                        <span className="tw-mono text-sm font-bold" style={{color}}>{d.value.toFixed(2)} {pmeta?.unit}</span>
+            return allCompare.length ? (
+              <>
+                <div className="tw-card">
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="tw-label">{pmeta?.label} — All Sources — Current Reading</div>
+                    {pmeta?.critLow&&<div className="text-[10px] text-red-600 tw-mono">Critical: &lt;{pmeta.critLow} {pmeta.unit}</div>}
+                    {pmeta?.warnLow&&<div className="text-[10px] text-amber-600 tw-mono">Warn: &lt;{pmeta.warnLow} {pmeta.unit}</div>}
+                  </div>
+                  <ResponsiveContainer width="100%" height={Math.max(180,allCompare.length*48)}>
+                    <BarChart data={allCompare} layout="vertical" margin={{top:0,right:40,bottom:0,left:10}}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#e2f0ea" horizontal={false}/>
+                      <XAxis type="number" tick={{fontSize:9,fill:'#4a7060',fontFamily:'JetBrains Mono'}} unit={pmeta?.unit?` ${pmeta.unit}`:''}/>
+                      <YAxis type="category" dataKey="name" tick={{fontSize:10,fill:'#4a7060'}} width={110}/>
+                      <Tooltip content={<CustomTooltip/>}/>
+                      {pmeta?.critLow&&<ReferenceLine x={pmeta.critLow} stroke="#dc2626" strokeDasharray="4 2"/>}
+                      {pmeta?.warnLow&&<ReferenceLine x={pmeta.warnLow} stroke="#f59e0b" strokeDasharray="4 2"/>}
+                      <Bar dataKey="value" name={pmeta?.label} radius={[0,4,4,0]}>
+                        {allCompare.map((d,i)=>(
+                          <Cell key={i} fill={selectedParam==='do_mg_l'?doColor(d.value):d.siteNo==='NERRS'?'#16a34a':d.siteNo==='GOES'?'#1d6fcc':pmeta?.color||'#0a9e80'}/>
+                        ))}
+                      </Bar>
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+
+                <div className="tw-card">
+                  <div className="tw-label mb-2">Ranked — {pmeta?.label}</div>
+                  {[...allCompare].sort((a,b)=>a.value-b.value).map((d,i)=>{
+                    const pct=(d.value/(Math.max(...allCompare.map(x=>x.value))||1))*100
+                    const color=selectedParam==='do_mg_l'?doColor(d.value):d.siteNo==='NERRS'?'#16a34a':pmeta?.color||'#0a9e80'
+                    return (
+                      <div key={d.siteNo+d.name} className="py-2 border-b border-bay-50 last:border-0">
+                        <div className="flex items-center gap-3 mb-1">
+                          <span className="tw-mono text-[10px] text-bay-300 w-4">#{i+1}</span>
+                          <span className="text-sm text-bay-700 flex-1">{d.name}</span>
+                          <span className="tw-mono text-sm font-bold" style={{color}}>{d.value.toFixed(2)} {pmeta?.unit}</span>
+                        </div>
+                        <div className="ml-7 h-2 rounded-full bg-bay-50 overflow-hidden">
+                          <div className="h-full rounded-full transition-all" style={{width:`${pct}%`,background:color}}/>
+                        </div>
                       </div>
-                      <div className="ml-7 h-2 rounded-full bg-bay-50 overflow-hidden">
-                        <div className="h-full rounded-full transition-all" style={{width:`${pct}%`,background:color}}/>
-                      </div>
-                    </div>
-                  )
-                })}
+                    )
+                  })}
+                </div>
+              </>
+            ) : (
+              <div className="tw-card text-center py-8 text-bay-400 text-sm">
+                {loading.water?<Spinner size={28}/>:'No data for this parameter across sources'}
               </div>
-            </>
-          ) : (
-            <div className="tw-card text-center py-8 text-bay-400 text-sm">
-              {loading.water?<Spinner size={28}/>:'No data for this parameter across stations'}
-            </div>
-          )}
+            )
+          })()}
         </div>
       )}
 
       {activeTab==='correlation' && (
         <div className="space-y-4">
           <div className="tw-card bg-bay-50 border-bay-200">
-            <div className="tw-label mb-1">Temperature vs DO₂ — Current Snapshot</div>
-            <div className="text-xs text-bay-400">Each point is one USGS station. Shows the inverse relationship: warmer water holds less dissolved oxygen.</div>
+            <div className="tw-label mb-1">Temperature vs DO₂ — Multi-Source Snapshot</div>
+            <div className="text-xs text-bay-400">Each point is one monitoring source (USGS + NERRS + GOES). Shows the inverse relationship: warmer water holds less dissolved oxygen.</div>
           </div>
           {(() => {
             const scatter = usgs.filter(s=>safeNum(s.readings?.water_temp_c)!=null&&safeNum(s.readings?.do_mg_l)!=null)
-              .map(s=>({ x:safeNum(s.readings.water_temp_c), y:safeNum(s.readings.do_mg_l), name:s.name.split(' at ')[0] }))
+              .map(s=>({ x:safeNum(s.readings.water_temp_c), y:safeNum(s.readings.do_mg_l), name:s.name.split(' at ')[0].split(' near ')[0], source:'USGS' }))
+            if (nTemp != null && nDO != null) scatter.push({ x: nTemp, y: nDO, name: 'Weeks Bay NERRS', source: 'NERRS' })
+            if (goesSst != null && nDO != null) scatter.push({ x: goesSst, y: nDO, name: 'GOES SST vs NERRS DO₂', source: 'GOES+NERRS' })
+
             return scatter.length >= 2 ? (
               <div className="tw-card">
-                <div className="tw-label mb-3">Temperature (°C) vs DO₂ (mg/L)</div>
+                <div className="tw-label mb-3">Temperature (°C) vs DO₂ (mg/L) — {scatter.length} points</div>
                 <ResponsiveContainer width="100%" height={280}>
                   <ScatterChart margin={{top:4,right:8,bottom:20,left:0}}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#e2f0ea"/>
@@ -445,14 +736,19 @@ export default function ScienceView() {
                     <YAxis type="number" dataKey="y" name="DO₂" unit=" mg/L" tick={{fontSize:9,fill:'#4a7060',fontFamily:'JetBrains Mono'}}/>
                     <ReferenceLine y={5} stroke="#f59e0b" strokeDasharray="4 2" label={{value:'Stress threshold',fontSize:9,fill:'#f59e0b',position:'right'}}/>
                     <ReferenceLine y={3} stroke="#dc2626" strokeDasharray="4 2" label={{value:'Critical',fontSize:9,fill:'#dc2626',position:'right'}}/>
-                    <Tooltip content={({active,payload})=>{ if(!active||!payload?.length) return null; const d=payload[0]?.payload; return <div className="tw-card shadow-md py-2 px-3 text-xs"><div className="font-bold text-bay-800 mb-1">{d.name}</div><div className="tw-mono text-bay-600">Temp: {d.x?.toFixed(1)}°C</div><div className="tw-mono" style={{color:doColor(d.y)}}>DO₂: {d.y?.toFixed(2)} mg/L</div></div>}}/>
+                    <Tooltip content={({active,payload})=>{ if(!active||!payload?.length) return null; const d=payload[0]?.payload; return <div className="tw-card shadow-md py-2 px-3 text-xs"><div className="font-bold text-bay-800 mb-1">{d.name}</div><div className="tw-mono text-[9px] text-bay-400 mb-1">{d.source}</div><div className="tw-mono text-bay-600">Temp: {d.x?.toFixed(1)}°C</div><div className="tw-mono" style={{color:doColor(d.y)}}>DO₂: {d.y?.toFixed(2)} mg/L</div></div>}}/>
                     <Scatter data={scatter} fill="#0a9e80">
-                      {scatter.map((d,i)=><Cell key={i} fill={doColor(d.y)}/>)}
+                      {scatter.map((d,i)=><Cell key={i} fill={d.source==='NERRS'?'#16a34a':d.source==='GOES+NERRS'?'#1d6fcc':doColor(d.y)}/>)}
                     </Scatter>
                   </ScatterChart>
                 </ResponsiveContainer>
-                <div className="grid grid-cols-3 gap-2 mt-3 pt-3 border-t border-bay-50">
-                  {[{l:'Warm + Low DO₂',c:'#dc2626',desc:'Hypoxia risk zone — summer stratification'},{l:'Moderate',c:'#f59e0b',desc:'Monitoring — possible stratification forming'},{l:'Cool + Good DO₂',c:'#10b981',desc:'Healthy — well-mixed water column'}].map(z=>(
+                <div className="grid grid-cols-4 gap-2 mt-3 pt-3 border-t border-bay-50">
+                  {[
+                    {l:'USGS Station',c:'#0a9e80',desc:'Riverine monitoring'},
+                    {l:'NERRS Weeks Bay',c:'#16a34a',desc:'Estuarine 15-min'},
+                    {l:'GOES SST cross',c:'#1d6fcc',desc:'Satellite vs in-situ'},
+                    {l:'Hypoxia Zone',c:'#dc2626',desc:'DO₂ < 3 mg/L'},
+                  ].map(z=>(
                     <div key={z.l} className="p-2 rounded bg-bay-50 text-center">
                       <div className="w-3 h-3 rounded-full mx-auto mb-1" style={{background:z.c}}/>
                       <div className="text-[10px] font-semibold" style={{color:z.c}}>{z.l}</div>
@@ -462,19 +758,45 @@ export default function ScienceView() {
                 </div>
               </div>
             ) : (
-              <div className="tw-card text-center py-8 text-bay-400 text-sm">Need ≥2 stations with both temperature and DO₂ readings</div>
+              <div className="tw-card text-center py-8 text-bay-400 text-sm">Need ≥2 sources with both temperature and DO₂ readings</div>
             )
           })()}
+
+          {nerrsOk && nSal != null && nDO != null && (
+            <div className="tw-card">
+              <div className="tw-label mb-3">Salinity vs DO₂ — NERRS + CO-OPS</div>
+              {(() => {
+                const pts = [{ x: nSal, y: nDO, name: 'NERRS Weeks Bay' }]
+                Object.values(coops).forEach(s => {
+                  const sal = safeNum(s.salinity)
+                  if (sal != null && nDO != null) pts.push({ x: sal, y: nDO, name: s.name })
+                })
+                return pts.length >= 1 ? (
+                  <ResponsiveContainer width="100%" height={220}>
+                    <ScatterChart margin={{top:4,right:8,bottom:20,left:0}}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#e2f0ea"/>
+                      <XAxis type="number" dataKey="x" name="Salinity" unit=" ppt" tick={{fontSize:9,fill:'#4a7060',fontFamily:'JetBrains Mono'}} label={{value:'Salinity (ppt)',position:'insideBottom',offset:-10,fontSize:10,fill:'#4a7060'}}/>
+                      <YAxis type="number" dataKey="y" name="DO₂" unit=" mg/L" tick={{fontSize:9,fill:'#4a7060',fontFamily:'JetBrains Mono'}}/>
+                      <Tooltip content={({active,payload})=>{ if(!active||!payload?.length) return null; const d=payload[0]?.payload; return <div className="tw-card shadow-md py-2 px-3 text-xs"><div className="font-bold text-bay-800 mb-1">{d.name}</div><div className="tw-mono text-bay-600">Sal: {d.x?.toFixed(1)} ppt</div><div className="tw-mono" style={{color:doColor(d.y)}}>DO₂: {d.y?.toFixed(2)} mg/L</div></div>}}/>
+                      <Scatter data={pts} fill="#7c3aed">
+                        {pts.map((d,i)=><Cell key={i} fill={i===0?'#16a34a':'#7c3aed'}/>)}
+                      </Scatter>
+                    </ScatterChart>
+                  </ResponsiveContainer>
+                ) : null
+              })()}
+            </div>
+          )}
         </div>
       )}
 
       {activeTab==='export' && (
         <div className="space-y-3">
           <div className="tw-card">
-            <div className="tw-label mb-2">Snapshot Export</div>
-            <div className="text-sm text-bay-600 mb-3">Current readings from all USGS and CO-OPS stations — formatted for spreadsheet analysis.</div>
+            <div className="tw-label mb-2">Full Multi-Source Snapshot Export</div>
+            <div className="text-sm text-bay-600 mb-3">Current readings from all sources — USGS, NERRS, CO-OPS, GOES-19, AirNow, HF Radar, Open-Meteo, iNaturalist, GBIF — formatted for spreadsheet analysis.</div>
             <button onClick={exportAllCSV} className="tw-btn-primary">
-              ↓ Download All Stations CSV
+              ↓ Download All Sources CSV
             </button>
           </div>
           <div className="tw-card">
@@ -505,8 +827,15 @@ export default function ScienceView() {
               {[
                 {label:'All stations realtime',url:'GET /api/water/realtime'},
                 {label:'HAB Oracle assessment',url:'GET /api/hab/assess'},
-                {label:'Historical data (any station/param)',url:'GET /api/water/historical/{siteNo}/{paramCode}?days=7'},
-                {label:'Active alerts',url:'GET /api/alerts'},
+                {label:'Historical data',url:'GET /api/water/historical/{siteNo}/{paramCode}?days=7'},
+                {label:'NERRS Weeks Bay',url:'GET /api/sensors/nerrs/latest'},
+                {label:'HF Radar currents',url:'GET /api/sensors/hfradar/summary'},
+                {label:'GOES-19 status',url:'GET /api/sensors/goes/status'},
+                {label:'Satellite composite',url:'GET /api/sensors/satellite/status'},
+                {label:'Ocean composite',url:'GET /api/sensors/ocean/status'},
+                {label:'Ecology composite',url:'GET /api/sensors/ecology/status'},
+                {label:'Air quality composite',url:'GET /api/sensors/airplus/status'},
+                {label:'Land/regulatory composite',url:'GET /api/sensors/land/status'},
                 {label:'Sensor registry',url:'GET /api/sensors/registry'},
                 {label:'ML Architecture v2 spec',url:'GET /api/ml/spec'},
               ].map(({label,url})=>(

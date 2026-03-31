@@ -158,7 +158,7 @@ npm run build         # Vite production build
 - **HAB Oracle**: Pre-bloom harmful algal bloom prediction (48-72h, World First™)
 - **Water Quality**: Interactive Leaflet map with NASA GIBS satellite overlays
 - **Feed Status**: Live status of all data feeds with health indicators
-- **Science View**: Data explorer for advanced analysis
+- **Science View**: Multi-source data explorer (NERRS, USGS, CO-OPS, GOES, PurpleAir, ecology, satellites, ocean models, land/regulatory) with station compare, correlation, and CSV export
 - **Sensor Registry**: Complete registry of all 50 data feed integrations
 - **WetlandAI**: Wetland pre-delineation module
 - **SITEVAULT**: Site assessment data vault
