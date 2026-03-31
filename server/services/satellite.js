@@ -279,22 +279,27 @@ export async function getCopernicusDEMStatus() {
 }
 
 export async function getAllSatelliteStatus() {
-  const [modis, viirs, hls, landsat, s2, dem] = await Promise.allSettled([
+  let goesModule
+  try { goesModule = await import('./goes.js') } catch(e) { goesModule = null }
+
+  const [modis, viirs, hls, landsat, s2, dem, goes] = await Promise.allSettled([
     getMODISChlorophyll(3),
     getVIIRSOceanColor(3),
     getHLSGranules(7),
     getLandsatGranules(16),
     getSentinel2Granules(7),
     getCopernicusDEMStatus(),
+    goesModule ? goesModule.getAllGOESStatus() : Promise.resolve({ status: { available: false }, imagery: { available: false } }),
   ])
 
   return {
-    modis:   modis.status   === 'fulfilled' ? modis.value   : { available: false },
-    viirs:   viirs.status   === 'fulfilled' ? viirs.value   : { available: false },
-    hls:     hls.status     === 'fulfilled' ? hls.value     : { available: false },
-    landsat: landsat.status === 'fulfilled' ? landsat.value : { available: false },
-    sentinel2: s2.status    === 'fulfilled' ? s2.value      : { available: false },
-    dem:     dem.status     === 'fulfilled' ? dem.value     : { available: false },
-    totalSources: 6,
+    modis:     modis.status     === 'fulfilled' ? modis.value     : { available: false },
+    viirs:     viirs.status     === 'fulfilled' ? viirs.value     : { available: false },
+    hls:       hls.status       === 'fulfilled' ? hls.value       : { available: false },
+    landsat:   landsat.status   === 'fulfilled' ? landsat.value   : { available: false },
+    sentinel2: s2.status        === 'fulfilled' ? s2.value        : { available: false },
+    dem:       dem.status       === 'fulfilled' ? dem.value       : { available: false },
+    goes:      goes.status      === 'fulfilled' ? goes.value      : { status: { available: false }, imagery: { available: false } },
+    totalSources: 7,
   }
 }
