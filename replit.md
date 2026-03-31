@@ -1,4 +1,4 @@
-# TERRAWATCH v2.0
+# TERRAWATCH v2.1
 
 Planetary Environmental Intelligence Platform — Mobile Bay & Gulf Coast
 
@@ -15,6 +15,13 @@ Planetary Environmental Intelligence Platform — Mobile Bay & Gulf Coast
 - **Icons**: Lucide React (sidebar navigation)
 - **Charts**: Recharts (includes inline sparklines in StatCards)
 - **Maps**: Leaflet
+
+## Server v2.1 Tiered Cron Architecture
+
+- **Fast cron (3min)**: USGS, CO-OPS, NERRS, HF Radar, AirNow, GOES-19 DB lookup, NDBC Buoy 42012, NWS Weather
+- **Slow cron (15min)**: Satellite (NASA CMR), Ocean models (HYCOM/CMEMS), Ecology (iNaturalist/GBIF/eBird), Land/Weather (Open-Meteo/AHPS), Air Quality (EPA AQS/OpenAQ/PurpleAir)
+- **ML feature vector**: 95+ features from 15 live data sources per tick
+- **HAB Oracle v2**: 10-factor weighted ensemble (6 legacy + 4 GOES-19 factors: stratification, rainfall nutrient pulse, satellite bloom signal, GLM lightning mixing)
 
 ## Project Structure
 

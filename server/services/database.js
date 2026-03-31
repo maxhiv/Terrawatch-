@@ -141,6 +141,43 @@ export async function writeModel(modelType, version, accuracy, aucRoc, nSamples,
   saveDB()
 }
 
+// ── GOES-19 push DB reader ────────────────────────────────────────────────────
+// Reads the most recent value for each GOES parameter written by routes/goes19.js
+// Returns null for any param not received within the last 4 hours.
+export async function getLatestGOESReadings() {
+  const db = await getDB()
+  const PARAMS = [
+    'sst_mean', 'sst_gradient', 'qpe_rainfall', 'qpe_6h', 'qpe_24h',
+    'cloud_coverage', 'glm_flashes', 'glm_active', 'amv_wind_speed', 'amv_wind_dir',
+  ]
+  const cutoff = Date.now() - 4 * 3600000
+  const result = {}
+  for (const param of PARAMS) {
+    const stmt = db.prepare(
+      'SELECT value FROM sensor_readings WHERE station=? AND param=? AND ts>? ORDER BY ts DESC LIMIT 1'
+    )
+    stmt.bind(['GOES19-ABI', param, cutoff])
+    result[param] = stmt.step() ? stmt.getAsObject().value : null
+    stmt.free()
+  }
+
+  const rgbStmt = db.prepare(
+    'SELECT value FROM sensor_readings WHERE station=? AND param=? AND ts>? ORDER BY ts DESC LIMIT 1'
+  )
+  rgbStmt.bind(['GOES19-ABI', 'rgb_ratios', cutoff])
+  if (rgbStmt.step()) {
+    try {
+      const raw = rgbStmt.getAsObject().value
+      const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw
+      result.bloom_index = parsed?.bloom_index ?? null
+      result.turbidity_idx = parsed?.turbidity_idx ?? null
+    } catch { result.bloom_index = null; result.turbidity_idx = null }
+  }
+  rgbStmt.free()
+
+  return result
+}
+
 export async function getHistory(station, param, hours = 168) {
   const db = await getDB()
   const since = Date.now() - hours * 3600000

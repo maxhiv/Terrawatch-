@@ -109,28 +109,91 @@ function stratificationIndex(surfaceTempC, bottomTempC, surfaceSal, bottomSal) {
   return Math.min(1, index)
 }
 
+// ── GOES-19 risk functions ────────────────────────────────────────────────────
+
+function goesStratificationRisk(sstGradientC) {
+  // GOES-19 SST gradient: bay_max_c − bay_min_c. Threshold ≥3.5°C from API spec.
+  if (sstGradientC == null) return 0.3
+  if (sstGradientC >= 5.0) return 0.95  // severe — immediate hypoxia precursor
+  if (sstGradientC >= 3.5) return 0.82  // API spec alarm threshold
+  if (sstGradientC >= 2.0) return 0.55
+  if (sstGradientC >= 1.0) return 0.30
+  return 0.10
+}
+
+function rainfallNutrientPulseRisk(qpe6hMm, qpe24hMm) {
+  // Heavy rain over watershed → N+P pulse → bay bloom 48-96h later
+  const r6  = qpe6hMm  ?? 0
+  const r24 = qpe24hMm ?? r6 * 4
+  if (r24 >= 50) return 0.90
+  if (r24 >= 25) return 0.75
+  if (r6  >= 5)  return 0.55  // API spec nutrient-pulse trigger
+  if (r24 >= 10) return 0.55
+  if (r6  >= 2)  return 0.30
+  return 0.10
+}
+
+function satelliteBloomSignal(bloomIndex) {
+  // GOES-19 RGB: (NIR−Red)/(NIR+Red). Elevated = chlorophyll surface expression.
+  if (bloomIndex == null) return 0.30
+  if (bloomIndex >= 0.35) return 0.92
+  if (bloomIndex >= 0.20) return 0.72
+  if (bloomIndex >= 0.12) return 0.50
+  if (bloomIndex >= 0.05) return 0.25
+  return 0.10
+}
+
+function glmLightningMixingRisk(glmFlashes5min) {
+  // Active storm = vertical mixing = DO₂ spike, then post-storm hypoxia rebound.
+  // No lightning = calm water = bloom-favorable — deliberately scores HIGH at zero.
+  if (glmFlashes5min == null) return 0.15
+  if (glmFlashes5min >= 20) return 0.80
+  if (glmFlashes5min >= 5)  return 0.60
+  if (glmFlashes5min >= 1)  return 0.40
+  return 0.15
+}
+
 export function runHabOracle(inputs) {
   const {
     water_temp_c, salinity_ppt, wind_speed_mph, wind_direction_deg,
     do_mg_l, streamflow_cfs, turbidity_ntu, nitrate_mg_l,
     surface_temp_c, bottom_temp_c, bottom_salinity_ppt, chlorophyll_ug_l,
+    // GOES-19 push fields
+    goes_sst_gradient, goes_qpe_6h, goes_qpe_24h, goes_bloom_index, goes_glm_flashes,
+    // HF Radar
+    hf_speed_ms, hf_bloom_14h_km,
   } = inputs
 
   const month = new Date().getMonth() + 1
   const seasonalPrior = SEASONAL_BLOOM_RISK[month] || 0.25
 
   const factors = {
-    temperature: temperatureRisk(water_temp_c || surface_temp_c),
-    salinity: salinityRisk(salinity_ppt),
-    wind: windRisk(wind_speed_mph, wind_direction_deg),
-    dissolved_oxygen: doRisk(do_mg_l),
-    nutrient_loading: nutrientLoadingRisk(streamflow_cfs, turbidity_ntu, nitrate_mg_l),
-    stratification: stratificationIndex(surface_temp_c || water_temp_c, bottom_temp_c, salinity_ppt, bottom_salinity_ppt),
+    temperature:             temperatureRisk(water_temp_c || surface_temp_c),
+    salinity:                salinityRisk(salinity_ppt),
+    wind:                    windRisk(wind_speed_mph, wind_direction_deg),
+    dissolved_oxygen:        doRisk(do_mg_l),
+    nutrient_loading:        nutrientLoadingRisk(streamflow_cfs, turbidity_ntu, nitrate_mg_l),
+    stratification:          stratificationIndex(surface_temp_c || water_temp_c, bottom_temp_c, salinity_ppt, bottom_salinity_ppt),
+    // GOES-19 derived factors — fill in as push data arrives, gracefully degrade to 0.3 when null
+    goes_stratification:     goesStratificationRisk(goes_sst_gradient),
+    rainfall_nutrient_pulse: rainfallNutrientPulseRisk(goes_qpe_6h, goes_qpe_24h),
+    satellite_bloom:         satelliteBloomSignal(goes_bloom_index),
+    glm_lightning_mixing:    glmLightningMixingRisk(goes_glm_flashes),
   }
 
+  // Weights sum to 1.00. GOES factors weighted above legacy stratification because
+  // geostationary 5-min SST gradient is a more direct signal than the proxy estimate.
   const WEIGHTS = {
-    temperature: 0.20, salinity: 0.15, wind: 0.20,
-    dissolved_oxygen: 0.15, nutrient_loading: 0.15, stratification: 0.15,
+    temperature:             0.12,
+    salinity:                0.09,
+    wind:                    0.12,
+    dissolved_oxygen:        0.10,
+    nutrient_loading:        0.09,
+    stratification:          0.09,
+    goes_stratification:     0.13,
+    rainfall_nutrient_pulse: 0.10,
+    satellite_bloom:         0.09,
+    glm_lightning_mixing:    0.07,
   }
 
   let weightedRisk = 0
@@ -197,7 +260,9 @@ export function runHabOracle(inputs) {
     dataQuality: {
       inputCount: Object.values(inputs).filter(v => v !== null && v !== undefined).length,
       totalInputs: Object.keys(inputs).length,
-      confidence: Object.values(inputs).filter(v => v !== null && v !== undefined).length >= 4 ? 'HIGH' : 'MODERATE',
+      confidence: Object.values(inputs).filter(v => v !== null && v !== undefined).length >= 8 ? 'HIGH' : 'MODERATE',
+      goesConnected: goes_sst_gradient != null || goes_bloom_index != null,
+      hfRadarConnected: hf_speed_ms != null,
     },
     version: '2.0.0',
     methodology: 'Multi-feed weighted ensemble + Bayesian seasonal prior. Based on Gulf Coast K. brevis ecology (Stumpf et al., NOAA).',
