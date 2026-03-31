@@ -37,7 +37,7 @@ terrawatch/
 │   │   └── MLArchitecture.jsx  # ML architecture docs
 │   ├── components/
 │   │   ├── Common/index.jsx    # StatCard, PageHeader, RiskBadge, Spinner, Section, EmptyState, AlertBanner
-│   │   ├── Charts/index.jsx    # DOChart, HABProbabilityChart
+│   │   ├── Charts/index.jsx    # DOChart, HABProbabilityChart, WeatherForecastChart, AirQualityChart, SatelliteTimelineChart, OceanConditionsChart
 │   │   └── Layout/Layout.jsx   # Sidebar navigation (16 routes)
 │   ├── store/index.js          # Zustand store (all API fetchers)
 │   ├── App.jsx                 # Router with nested Layout routes
@@ -81,9 +81,9 @@ npm run dev:server    # Backend only
 npm run build         # Vite production build
 ```
 
-## Data Sources (50 total — 37 active, 6 key-required, 5 planned, 2 partnership)
+## Data Sources (51 total — 38+ active, key-required varies by env, 5 planned, 2 partnership)
 
-### Tier 1 — No Keys Required (27 sources)
+### Tier 1 — No Keys Required (28 sources)
 - USGS NWIS — water quality and streamflow (6 stations)
 - NOAA CO-OPS — tidal data and water levels
 - NOAA NWS — weather forecasts and alerts
@@ -93,6 +93,7 @@ npm run build         # Vite production build
 - EPA ECHO — facility compliance data
 - EPA Water Quality Portal — federal water quality
 - EPA TRI — toxic release inventory
+- GOES-19 ABI — geostationary SST + imagery (NOAA STAR CDN, no key)
 - Copernicus DEM GLO-30 — 30m global elevation
 - HYCOM Ocean Model — 3D currents, temp, salinity
 - NOAA CoastWatch ERDDAP — SST, chlorophyll, SSH
@@ -130,6 +131,7 @@ npm run build         # Vite production build
 - `ecology.js` — iNaturalist, GBIF, eBird, AmeriFlux
 - `landregweather.js` — Open-Meteo, AHPS, NCEI, SSURGO, NWI, FEMA, NLCD, ATTAINS, USACE
 - `airplus.js` — EPA AQS, OpenAQ, PurpleAir
+- `goes.js` — GOES-19 ABI SST (CoastWatch ERDDAP) + imagery (NOAA STAR CDN)
 
 ### New API Routes (server/routes/sensors.js)
 - `/api/sensors/satellite/status` — composite satellite status
@@ -146,6 +148,9 @@ npm run build         # Vite production build
 - `/api/sensors/airplus/status` — composite air quality status
 - `/api/sensors/airplus/openaq` — OpenAQ readings
 - `/api/sensors/airplus/purpleair` — PurpleAir PM2.5
+- `/api/sensors/goes/status` — GOES-19 SST status
+- `/api/sensors/goes/image` — GOES-19 latest imagery (sector/band params)
+- `/api/sensors/goes/all` — composite GOES status + imagery
 
 ## Key Features
 

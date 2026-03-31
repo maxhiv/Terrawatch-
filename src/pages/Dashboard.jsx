@@ -1,7 +1,7 @@
 import { useEffect } from 'react'
 import { useStore } from '../store/index.js'
 import { StatCard, PageHeader, RiskBadge, Spinner, Section, EmptyState, AlertBanner } from '../components/Common/index.jsx'
-import { HABProbabilityChart } from '../components/Charts/index.jsx'
+import { HABProbabilityChart, WeatherForecastChart } from '../components/Charts/index.jsx'
 import clsx from 'clsx'
 
 function safeVal(v) {
@@ -15,8 +15,9 @@ function safeVal(v) {
 export default function Dashboard() {
   const {
     waterQuality, habAssessment, weather, alerts, loading,
-    nerrs, hfradar, aqi,
-    fetchAll, fetchNERRS, fetchHFRadar, fetchAQI, lastUpdated
+    nerrs, hfradar, aqi, goesStatus, ecologyStatus, sensors,
+    fetchAll, fetchNERRS, fetchHFRadar, fetchAQI, fetchGOESStatus,
+    fetchEcologyStatus, lastUpdated
   } = useStore()
 
   const isLoading = Object.values(loading).some(Boolean)
@@ -25,6 +26,8 @@ export default function Dashboard() {
     fetchNERRS()
     fetchHFRadar()
     fetchAQI()
+    fetchGOESStatus()
+    fetchEcologyStatus()
   }, [])
 
   const habProb = habAssessment?.hab?.probability
@@ -56,12 +59,26 @@ export default function Dashboard() {
   const windDir = safeVal(weather?.current?.wind_direction)
   const salinity = safeVal(waterQuality?.coops?.['8735180']?.salinity?.value)
 
+  const goesSst = safeVal(goesStatus?.status?.latestSST_C)
+  const aqiVal = aqi?.readings?.[0]?.aqi
+  const aqiCat = aqi?.readings?.[0]?.category
+
+  const inatCount = ecologyStatus?.iNaturalist?.totalCount
+  const totalSensors = sensors?.summary?.active || 0
+
+  const forecastData = weather?.forecast?.periods?.slice(0, 7)?.map((p, i) => ({
+    day: p.name?.substring(0, 3) || `D${i}`,
+    high: p.isDaytime !== false ? p.temperature : null,
+    low: p.isDaytime === false ? p.temperature : null,
+    precipChance: p.probabilityOfPrecipitation?.value || 0,
+  })).filter(d => d.high != null || d.low != null) || []
+
   return (
     <div className="p-6 max-w-7xl animate-in">
       <PageHeader
         icon="◎"
         title="Environmental Dashboard"
-        subtitle="Mobile Bay · Real-time monitoring · 22+ government data feeds"
+        subtitle={`Mobile Bay · Real-time monitoring · ${totalSensors || '50+'} data sources`}
         actions={
           <div className="flex items-center gap-2">
             {lastUpdated && (
@@ -98,9 +115,18 @@ export default function Dashboard() {
         </div>
       </Section>
 
+      <Section title="Extended Monitoring">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <StatCard label="GOES-19 SST" value={goesSst != null ? goesSst.toFixed(1) : '—'} unit="°C" color="#d97706" icon="🛰️" sub="Gulf of Mexico · Hourly" />
+          <StatCard label="Air Quality" value={aqiVal ?? '—'} unit="AQI" color={aqiVal > 100 ? '#dc2626' : aqiVal > 50 ? '#f59e0b' : '#10b981'} icon="🌬️" sub={aqiCat || 'AirNow'} alert={aqiVal > 100} />
+          <StatCard label="Biodiversity" value={inatCount ?? '—'} unit="obs" color="#16a34a" icon="🦎" sub="iNaturalist 7-day" />
+          <StatCard label="Active Feeds" value={totalSensors || '—'} color="#0a9e80" icon="⊞" sub={`${sensors?.summary?.totalActiveFeeds || '—'} total feeds`} />
+        </div>
+      </Section>
+
       {(nerrs?.waterQuality?.available || hfradar?.available || aqi?.available) && (
         <div className="tw-card mb-4 border-teal-200" style={{background:'#f0fdf9'}}>
-          <div className="tw-label text-teal-600 mb-2">New Live Feeds — Earthdata + Copernicus + AirNow</div>
+          <div className="tw-label text-teal-600 mb-2">Live Feeds — Earthdata + Copernicus + AirNow</div>
           <div className="flex flex-wrap gap-4">
             {nerrs?.waterQuality?.available && (() => {
               const d = nerrs.waterQuality.latest || {}
@@ -139,6 +165,18 @@ export default function Dashboard() {
                   <div className="tw-mono text-sm font-bold text-amber-700">
                     {aqi.readings[0].aqi} AQI
                     <span className="text-bay-400 font-normal ml-2">{aqi.readings[0].category}</span>
+                  </div>
+                </div>
+              </div>
+            )}
+            {(goesStatus?.status?.available || goesStatus?.status?.imageryAvailable) && (
+              <div className="flex items-center gap-2">
+                <div className="w-2 h-2 rounded-full bg-orange-500 animate-pulse"/>
+                <div>
+                  <div className="tw-label mb-0.5">GOES-19 SST</div>
+                  <div className="tw-mono text-sm font-bold text-orange-700">
+                    {goesSst != null ? `${goesSst.toFixed(1)}°C` : 'Active'}
+                    <span className="text-bay-400 font-normal ml-2">Gulf of Mexico</span>
                   </div>
                 </div>
               </div>
@@ -219,6 +257,13 @@ export default function Dashboard() {
           ))}
         </div>
       </div>
+
+      {forecastData.length > 0 && (
+        <div className="tw-card mb-6">
+          <div className="tw-label mb-3">7-Day Forecast — NWS Mobile Bay</div>
+          <WeatherForecastChart data={forecastData} />
+        </div>
+      )}
 
       {habAssessment?.hab && (
         <Section title="HAB Oracle Assessment Detail">

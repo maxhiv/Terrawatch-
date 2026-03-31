@@ -4,6 +4,7 @@ import { getWeeksBayLatest, getWeeksBayTimeSeries } from '../services/nerrs.js'
 import { getPaceStatus, getPaceHabSignal, searchPaceGranules } from '../services/pace.js'
 import { getMethaneStatus, searchTROPOMIGranules } from '../services/tropomi.js'
 import { getMobileBayNPDESFacilities, getWQPResults, getMobileAQI, getTRIFacilities } from '../services/epa.js'
+import { getGOES19Status, getGOES19LatestImage, getAllGOESStatus } from '../services/goes.js'
 import axios from 'axios'
 
 const router = express.Router()
@@ -43,6 +44,7 @@ function buildSensorRegistry() {
     { id:'hls',          name:'NASA HLS (Landsat+S2)',   type:'satellite',     status:nasaCreds ? 'active' : 'key_required', feeds:2, cost:'free', auth:'NASA_EARTHDATA_USER+PASS' },
     { id:'landsat',      name:'Landsat Collection 2',    type:'satellite',     status:nasaCreds ? 'active' : 'key_required', feeds:1, cost:'free', auth:'NASA_EARTHDATA_USER+PASS' },
     { id:'sentinel2',    name:'Sentinel-2 L2A (10m)',    type:'satellite',     status:copCreds ? 'active' : 'key_required', feeds:1, cost:'free', auth:'COPERNICUS_USER+PASS' },
+    { id:'goes19',       name:'GOES-19 ABI',             type:'satellite',     status:'active',       feeds:2, cost:'free', auth:'none' },
     { id:'cop_dem',      name:'Copernicus DEM GLO-30',   type:'elevation',     status:'active',       feeds:1, cost:'free', auth:'none' },
 
     { id:'cmems_phys',   name:'CMEMS Ocean Physics',     type:'ocean_model',   status:copCreds ? 'active' : 'key_required', feeds:1, cost:'free', auth:'COPERNICUS_USER+PASS' },
@@ -237,6 +239,21 @@ router.get('/airplus/openaq', async (req, res) => {
 
 router.get('/airplus/purpleair', async (req, res) => {
   try { const m = await getAirPlus(); res.json(await m.getPurpleAirReadings()) }
+  catch (err) { res.status(500).json({ error: err.message }) }
+})
+
+router.get('/goes/status', async (req, res) => {
+  try { res.json(await getGOES19Status()) }
+  catch (err) { res.status(500).json({ error: err.message }) }
+})
+
+router.get('/goes/image', async (req, res) => {
+  try { res.json(await getGOES19LatestImage(req.query.sector || 'gm', req.query.band || 'GEOCOLOR')) }
+  catch (err) { res.status(500).json({ error: err.message }) }
+})
+
+router.get('/goes/all', async (req, res) => {
+  try { res.json(await getAllGOESStatus()) }
   catch (err) { res.status(500).json({ error: err.message }) }
 })
 

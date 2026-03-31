@@ -16,6 +16,12 @@ export const useStore = create((set, get) => ({
   sensors: null,
   feedStatus: null,
   epaNpdes: null,
+  satelliteStatus: null,
+  oceanStatus: null,
+  ecologyStatus: null,
+  landStatus: null,
+  airplusStatus: null,
+  goesStatus: null,
 
   lastUpdated: null,
   liveMode: true,
@@ -24,8 +30,16 @@ export const useStore = create((set, get) => ({
   toggleLiveMode: () => set(s => ({ liveMode: !s.liveMode })),
 
   fetchAll: async () => {
-    const { fetchWater, fetchHAB, fetchWeather, fetchAlerts, fetchSensors } = get()
-    await Promise.allSettled([fetchWater(), fetchHAB(), fetchWeather(), fetchAlerts(), fetchSensors()])
+    const {
+      fetchWater, fetchHAB, fetchWeather, fetchAlerts, fetchSensors,
+      fetchSatelliteStatus, fetchOceanStatus, fetchEcologyStatus,
+      fetchLandStatus, fetchAirPlusStatus, fetchGOESStatus,
+    } = get()
+    await Promise.allSettled([
+      fetchWater(), fetchHAB(), fetchWeather(), fetchAlerts(), fetchSensors(),
+      fetchSatelliteStatus(), fetchOceanStatus(), fetchEcologyStatus(),
+      fetchLandStatus(), fetchAirPlusStatus(), fetchGOESStatus(),
+    ])
     set({ lastUpdated: Date.now() })
   },
 
@@ -146,5 +160,53 @@ export const useStore = create((set, get) => ({
       const data = await res.json()
       set({ aqi: data })
     } catch (e) { console.error('[Store] AQI fetch error:', e) }
+  },
+
+  fetchSatelliteStatus: async () => {
+    try {
+      const res = await fetch(`${API}/api/sensors/satellite/status`)
+      const data = await res.json()
+      set({ satelliteStatus: data })
+    } catch (e) { console.error('[Store] satellite status error:', e) }
+  },
+
+  fetchOceanStatus: async () => {
+    try {
+      const res = await fetch(`${API}/api/sensors/ocean/status`)
+      const data = await res.json()
+      set({ oceanStatus: data })
+    } catch (e) { console.error('[Store] ocean status error:', e) }
+  },
+
+  fetchEcologyStatus: async () => {
+    try {
+      const res = await fetch(`${API}/api/sensors/ecology/status`)
+      const data = await res.json()
+      set({ ecologyStatus: data })
+    } catch (e) { console.error('[Store] ecology status error:', e) }
+  },
+
+  fetchLandStatus: async () => {
+    try {
+      const res = await fetch(`${API}/api/sensors/land/status`)
+      const data = await res.json()
+      set({ landStatus: data })
+    } catch (e) { console.error('[Store] land status error:', e) }
+  },
+
+  fetchAirPlusStatus: async () => {
+    try {
+      const res = await fetch(`${API}/api/sensors/airplus/status`)
+      const data = await res.json()
+      set({ airplusStatus: data })
+    } catch (e) { console.error('[Store] airplus status error:', e) }
+  },
+
+  fetchGOESStatus: async () => {
+    try {
+      const res = await fetch(`${API}/api/sensors/goes/all`)
+      const data = await res.json()
+      set({ goesStatus: data })
+    } catch (e) { console.error('[Store] GOES status error:', e) }
   },
 }))
