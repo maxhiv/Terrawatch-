@@ -22,18 +22,41 @@ const TABS = [
   { id: 'ml', label: 'Feature Vector', icon: '⊡', color: '#ec4899' },
 ]
 
+function degToCompass(deg) {
+  if (deg == null) return null
+  const dirs = ['N','NNE','NE','ENE','E','ESE','SE','SSE','S','SSW','SW','WSW','W','WNW','NW','NNW']
+  return dirs[Math.round(deg / 22.5) % 16]
+}
+
+function alertBadge(label, value) {
+  const v = safeVal(value)
+  if (v == null) return null
+  const lbl = label.toLowerCase()
+  if (lbl.includes('do') && !lbl.includes('dom') && v < 4) return 'CRITICAL'
+  if (lbl.includes('uv') && v > 8) return 'VERY HIGH'
+  if (lbl.includes('pm2.5') && v > 35) return 'UNHEALTHY'
+  if (lbl.includes('wave') && lbl.includes('height') && v > 2) return 'HIGH SEAS'
+  if (lbl.includes('gust') && v > 15) return 'GUSTY'
+  return null
+}
+
 function KeyRow({ label, value, unit, source }) {
   const raw = typeof value === 'object' && value != null && 'value' in value ? value.value : value
   const num = safeVal(raw)
   const display = num != null
     ? (typeof num === 'number' ? num.toFixed(2) : String(num))
     : (raw != null && raw !== '' ? String(raw) : '—')
+  const isDir = unit === '°' && (label.toLowerCase().includes('dir') || label.toLowerCase().includes('direction'))
+  const compass = isDir && num != null ? degToCompass(num) : null
+  const badge = alertBadge(label, raw)
   return (
     <div className="flex items-center py-1.5 border-b border-bay-50 last:border-0">
       <div className="flex-1 text-xs text-bay-600">{label}</div>
+      {badge && <span className="tw-mono text-[8px] px-1 py-0.5 rounded bg-red-100 text-red-700 font-bold mr-1">{badge}</span>}
       <div className="tw-mono text-xs font-semibold text-bay-800 mr-2">
         {display}
-        {unit && display !== '—' && <span className="text-bay-400 font-normal ml-1">{unit}</span>}
+        {compass && <span className="text-teal-600 font-normal ml-1">{compass}</span>}
+        {unit && display !== '—' && !compass && <span className="text-bay-400 font-normal ml-1">{unit}</span>}
       </div>
       {source && <span className="tw-mono text-[8px] px-1.5 py-0.5 rounded bg-bay-50 text-bay-300">{source}</span>}
     </div>

@@ -245,7 +245,7 @@ export function buildFeatureVector(data = {}) {
     ahps_flood_stage_ft: safeN(land?.ahps?.stage),
     ahps_flood_active:   land?.ahps?.available ? 1 : 0,
     ncei_data_available: land?.ncei?.available ? 1 : 0,
-    fema_flood_zone:     land?.fema?.floodZone ? 1 : 0,
+    fema_flood_zone:     (land?.fema?.floodZone ?? land?.fema?.inFloodZone) ? 1 : 0,
     nlcd_impervious_pct: safeN(land?.nlcd?.imperviousPct),
   }
 

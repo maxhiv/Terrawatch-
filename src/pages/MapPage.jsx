@@ -311,6 +311,28 @@ export default function MapPage() {
               </div>
             )
           })}
+
+          {waterQuality?.buoy && (
+            <div className="mt-3 pt-2 border-t border-bay-100">
+              <div className="tw-label text-purple-600 mb-1">≋ Waves — Buoy 42012</div>
+              <div className="space-y-0.5">
+                {safeNum(waterQuality.buoy.WVHT)!=null&&<div className="tw-mono text-[10px]"><span className="text-bay-400">Height:</span> <span className="font-bold text-purple-700">{safeNum(waterQuality.buoy.WVHT).toFixed(1)}m</span></div>}
+                {safeNum(waterQuality.buoy.DPD)!=null&&<div className="tw-mono text-[10px]"><span className="text-bay-400">Period:</span> {safeNum(waterQuality.buoy.DPD).toFixed(0)}s</div>}
+                {safeNum(waterQuality.buoy.MWD)!=null&&<div className="tw-mono text-[10px]"><span className="text-bay-400">Direction:</span> {safeNum(waterQuality.buoy.MWD)}° {['N','NNE','NE','ENE','E','ESE','SE','SSE','S','SSW','SW','WSW','W','WNW','NW','NNW'][Math.round(safeNum(waterQuality.buoy.MWD)/22.5)%16]}</div>}
+              </div>
+            </div>
+          )}
+
+          {landStatus?.openMeteo?.current && (
+            <div className="mt-2 pt-2 border-t border-bay-100">
+              <div className="tw-label text-amber-600 mb-1">☀ Solar / UV</div>
+              <div className="space-y-0.5">
+                {safeNum(landStatus.openMeteo.current.uv_index)!=null&&<div className="tw-mono text-[10px]"><span className="text-bay-400">UV Index:</span> <span className={clsx('font-bold',safeNum(landStatus.openMeteo.current.uv_index)>8?'text-red-600':safeNum(landStatus.openMeteo.current.uv_index)>5?'text-amber-600':'text-green-600')}>{safeNum(landStatus.openMeteo.current.uv_index).toFixed(1)}</span></div>}
+                {safeNum(landStatus.openMeteo.current.solar_rad_wm2)!=null&&<div className="tw-mono text-[10px]"><span className="text-bay-400">Solar:</span> {safeNum(landStatus.openMeteo.current.solar_rad_wm2).toFixed(0)} W/m²</div>}
+                {nerrs?.meteorological?.latest?.TotPAR?.value!=null&&<div className="tw-mono text-[10px]"><span className="text-bay-400">PAR:</span> {parseFloat(nerrs.meteorological.latest.TotPAR.value).toFixed(0)} mmol/m²</div>}
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>

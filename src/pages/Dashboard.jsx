@@ -58,7 +58,7 @@ export default function Dashboard() {
 
   const tempF = safeVal(weather?.current?.temp_f)
   const tempC = safeVal(weather?.current?.temp_c)
-  const windMph = safeVal(weather?.current?.wind_mph)
+  const windMph = safeVal(weather?.current?.wind_speed_mph) ?? safeVal(weather?.current?.wind_mph)
   const windDir = safeVal(weather?.current?.wind_direction)
   const salinity = safeVal(waterQuality?.coops?.['8735180']?.salinity?.value)
 
@@ -75,8 +75,9 @@ export default function Dashboard() {
   const windGustMph = safeVal(weather?.current?.wind_gust_mph)
   const pm25Purple = safeVal(airplusStatus?.purpleAir?.avgPM25)
   const pm25OpenAQ = safeVal(airplusStatus?.openAQ?.avgPM25)
-  const pm25 = pm25Purple ?? pm25OpenAQ
-  const pm25Source = pm25Purple != null ? 'PurpleAir' : 'OpenAQ'
+  const pm25Sources = [pm25Purple, pm25OpenAQ].filter(v => v != null)
+  const pm25 = pm25Sources.length ? pm25Sources.reduce((a,b) => a+b, 0) / pm25Sources.length : null
+  const pm25Source = pm25Sources.length > 1 ? `Avg ${pm25Sources.length} sources` : (pm25Purple != null ? 'PurpleAir' : pm25OpenAQ != null ? 'OpenAQ' : '—')
 
   const goesBloom = safeVal(goesLatest?.bloom_index)
   const goesCloud = safeVal(goesLatest?.cloud_coverage)
