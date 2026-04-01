@@ -35,12 +35,12 @@ export const useStore = create((set, get) => ({
     const {
       fetchWater, fetchHAB, fetchWeather, fetchAlerts, fetchSensors,
       fetchSatelliteStatus, fetchOceanStatus, fetchEcologyStatus,
-      fetchLandStatus, fetchAirPlusStatus, fetchGOESStatus,
+      fetchLandStatus, fetchAirPlusStatus, fetchGOESStatus, fetchGoesLatest,
     } = get()
     await Promise.allSettled([
       fetchWater(), fetchHAB(), fetchWeather(), fetchAlerts(), fetchSensors(),
       fetchSatelliteStatus(), fetchOceanStatus(), fetchEcologyStatus(),
-      fetchLandStatus(), fetchAirPlusStatus(), fetchGOESStatus(),
+      fetchLandStatus(), fetchAirPlusStatus(), fetchGOESStatus(), fetchGoesLatest(),
     ])
     set({ lastUpdated: Date.now() })
   },

@@ -255,7 +255,7 @@ app.listen(PORT, () => {
 ║  CRON 3min  → USGS · CO-OPS · NERRS · HFRadar · GOES-DB ║
 ║               NDBC Buoy · NWS Weather · AirNow           ║
 ║  CRON 15min → Satellite · Ocean · Ecology · Land · Air   ║
-║  ML vector  → 95+ features from 15 live data sources     ║
+║  ML vector  → 141 features from 15+ live data sources    ║
 ║  Phase 1+2 active — SQLite persistence + auto-label      ║
 ║  Phase 3 pre-wired — Vertex AI CNN-LSTM on threshold     ║
 ║  "Give the world eyes on its ecosystems."                ║
