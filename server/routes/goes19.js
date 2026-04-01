@@ -1,5 +1,5 @@
 import express from 'express'
-import { writeReadings } from '../services/database.js'
+import { writeReadings, getLatestGOESReadings } from '../services/database.js'
 
 const router = express.Router()
 
@@ -111,6 +111,16 @@ router.get('/latest', (req, res) => {
     return res.json({ status: 'no_data', message: 'No GOES-19 scans received yet' })
   }
   res.json({ status: 'ok', ...latestScan })
+})
+
+router.get('/db', async (req, res) => {
+  try {
+    const readings = await getLatestGOESReadings()
+    res.json({ status: 'ok', readings, count: Object.keys(readings).filter(k => readings[k] != null).length })
+  } catch (err) {
+    console.error('[GOES19] DB query error:', err.message)
+    res.json({ status: 'error', readings: {}, error: err.message })
+  }
 })
 
 router.get('/health', (req, res) => {

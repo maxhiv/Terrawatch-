@@ -62,12 +62,15 @@ export function buildFeatureVector(data = {}) {
   const stationMap = {}
   for (const s of usgs) {
     stationMap[s.siteNo] = {
-      do2:   safeNum(s.readings?.do_mg_l),
-      temp:  safeNum(s.readings?.water_temp_c),
-      flow:  safeNum(s.readings?.streamflow_cfs),
-      pH:    safeNum(s.readings?.pH),
-      turb:  safeNum(s.readings?.turbidity_ntu),
-      cond:  safeNum(s.readings?.conductance_us_cm),
+      do2:    safeNum(s.readings?.do_mg_l),
+      temp:   safeNum(s.readings?.water_temp_c),
+      flow:   safeNum(s.readings?.streamflow_cfs),
+      pH:     safeNum(s.readings?.pH),
+      turb:   safeNum(s.readings?.turbidity_ntu),
+      cond:   safeNum(s.readings?.conductance_us_cm),
+      gage:   safeNum(s.readings?.gage_height_ft),
+      orthoP: safeNum(s.readings?.orthophosphate_mg_l),
+      totalN: safeNum(s.readings?.total_nitrogen_mg_l),
     }
   }
 
@@ -83,12 +86,26 @@ export function buildFeatureVector(data = {}) {
   const wb = nerrs?.waterQuality?.latest || {}
   const nerrsValues = {
     wbDo2:    wb.DO_mgl?.value ?? null,
+    wbDOPct:  wb.DO_pct?.value ?? null,
     wbTemp:   wb.Temp?.value ?? null,
     wbSal:    wb.Sal?.value ?? null,
     wbTurb:   wb.Turb?.value ?? null,
     wbChlFl:  wb.ChlFluor?.value ?? null,
     wbCond:   wb.SpCond?.value ?? null,
     wbPH:     wb.pH?.value ?? null,
+    wbDepth:  wb.Depth?.value ?? wb.Level?.value ?? null,
+  }
+
+  const met = nerrs?.meteorological?.latest || {}
+  const nerrsMetValues = {
+    wbWSpd:    met.WSpd?.value ?? null,
+    wbMaxWSpd: met.MaxWSpd?.value ?? null,
+    wbWdir:    met.Wdir?.value ?? null,
+    wbATemp:   met.ATemp?.value ?? null,
+    wbBP:      met.BP?.value ?? null,
+    wbPAR:     met.TotPAR?.value ?? null,
+    wbPrec:    met.TotPrec?.value ?? null,
+    wbRH:      met.RH?.value ?? null,
   }
 
   const hf = hfRadar || {}
@@ -110,9 +127,12 @@ export function buildFeatureVector(data = {}) {
 
   const dauphinIsland = coops['8735180'] || {}
   const tidal = {
-    waterLevel_dauphinIs: safeNum(dauphinIsland.water_level),
-    salinity_dauphinIs:   safeNum(dauphinIsland.salinity),
-    waterTemp_dauphinIs:  safeNum(dauphinIsland.water_temperature),
+    waterLevel_dauphinIs:  safeNum(dauphinIsland.water_level),
+    salinity_dauphinIs:    safeNum(dauphinIsland.salinity),
+    waterTemp_dauphinIs:   safeNum(dauphinIsland.water_temperature),
+    coops_wind_speed:      safeNum(dauphinIsland.wind),
+    coops_air_pressure_mb: safeNum(dauphinIsland.air_pressure),
+    coops_air_temp_c:      safeNum(dauphinIsland.air_temperature),
   }
 
   // ── GOES-19 push features ─────────────────────────────────────────────────
@@ -139,23 +159,34 @@ export function buildFeatureVector(data = {}) {
   // NDBC txt format uses raw header names: WTMP=water temp, WSPD=wind speed,
   // WDIR=wind dir, ATMP=air temp, PRES=pressure, WVHT=wave height
   const buoyFeatures = {
-    buoy_water_temp_c:  safeN(buoy?.WTMP),    // offshore water temp — bloom precursor
-    buoy_wind_speed_ms: safeN(buoy?.WSPD),    // offshore wind — mixing indicator
-    buoy_wind_dir_deg:  safeN(buoy?.WDIR),
-    buoy_air_temp_c:    safeN(buoy?.ATMP),
-    buoy_pressure_mb:   safeN(buoy?.PRES),
-    buoy_wave_height_m: safeN(buoy?.WVHT),    // sea state — bloom dispersion
-    buoy_available:     buoy != null ? 1 : 0,
+    buoy_water_temp_c:      safeN(buoy?.WTMP),
+    buoy_wind_speed_ms:     safeN(buoy?.WSPD),
+    buoy_wind_dir_deg:      safeN(buoy?.WDIR),
+    buoy_wind_gust_ms:      safeN(buoy?.GST),
+    buoy_air_temp_c:        safeN(buoy?.ATMP),
+    buoy_pressure_mb:       safeN(buoy?.PRES),
+    buoy_wave_height_m:     safeN(buoy?.WVHT),
+    buoy_dom_wave_period_s: safeN(buoy?.DPD),
+    buoy_avg_wave_period_s: safeN(buoy?.APD),
+    buoy_mean_wave_dir:     safeN(buoy?.MWD),
+    buoy_dewpoint_c:        safeN(buoy?.DEWP),
+    buoy_available:         buoy != null ? 1 : 0,
   }
 
   // ── NOAA NWS weather — surface wind at Mobile Bay ─────────────────────────
   const nwsCurrent = weather?.current || {}
   const weatherFeatures = {
     nws_wind_speed_mph: safeN(nwsCurrent.wind_speed_mph),
+    nws_wind_speed_ms:  safeN(nwsCurrent.wind_speed_ms),
+    nws_wind_gust_mph:  safeN(nwsCurrent.wind_gust_mph),
+    nws_wind_gust_ms:   safeN(nwsCurrent.wind_gust_ms),
     nws_wind_dir_deg:   safeN(nwsCurrent.wind_direction),
     nws_temp_f:         safeN(nwsCurrent.temp_f),
+    nws_temp_c:         safeN(nwsCurrent.temp_c),
     nws_humidity_pct:   safeN(nwsCurrent.humidity),
+    nws_dewpoint_c:     safeN(nwsCurrent.dewpoint_c),
     nws_pressure_mb:    safeN(nwsCurrent.pressure_mb),
+    nws_visibility_m:   safeN(nwsCurrent.visibility_m),
     nws_available:      nwsCurrent.wind_speed_mph != null ? 1 : 0,
   }
 
@@ -189,16 +220,28 @@ export function buildFeatureVector(data = {}) {
 
   // ── Land + weather features ────────────────────────────────────────────────
   const openMeteo  = land?.openMeteo
+  const omNow = openMeteo?.current || {}
   const landFeatures = {
-    precip_current_mm:   safeN(openMeteo?.current?.precip_mm),
-    wind_ms_openmeteo:   safeN(openMeteo?.current?.wind_ms),
-    cape_jkg:            safeN(openMeteo?.current?.cape),      // convective energy — storm risk
+    precip_current_mm:   safeN(omNow.precip_mm),
+    wind_ms_openmeteo:   safeN(omNow.wind_ms),
+    cape_jkg:            safeN(omNow.cape),
+    solar_rad_wm2:       safeN(omNow.solar_rad_wm2),
+    uv_index:            safeN(omNow.uv_index),
+    lifted_index:        safeN(omNow.lifted_index),
+    soil_moisture:       safeN(omNow.soil_moisture),
+    cin:                 safeN(omNow.cin),
+    blh:                 safeN(omNow.blh),
     precip_7day_sum_mm:  openMeteo?.dailyForecast
       ? openMeteo.dailyForecast.slice(0,7).reduce((s,d) => s + (safeN(d.precip_sum_mm) ?? 0), 0)
       : null,
     max_precip_prob_7d:  openMeteo?.dailyForecast
       ? Math.max(...openMeteo.dailyForecast.slice(0,7).map(d => safeN(d.precipProb) ?? 0))
       : null,
+    uv_max_7d:           openMeteo?.dailyForecast
+      ? Math.max(...openMeteo.dailyForecast.slice(0,7).map(d => safeN(d.uv_max) ?? 0))
+      : null,
+    sunshine_hrs_today:  safeN(openMeteo?.dailyForecast?.[0]?.sunshine_hrs),
+    solar_sum_today:     safeN(openMeteo?.dailyForecast?.[0]?.solar_sum_wm2),
     ahps_flood_stage_ft: safeN(land?.ahps?.stage),
     ahps_flood_active:   land?.ahps?.available ? 1 : 0,
     ncei_data_available: land?.ncei?.available ? 1 : 0,
@@ -244,8 +287,14 @@ export function buildFeatureVector(data = {}) {
     do2_mobilei65:     stationMap['02469761']?.do2 ?? null,
     flow_mobilei65:    stationMap['02469761']?.flow ?? null,
     turb_dogriver:     stationMap['02479000']?.turb ?? null,
+    gage_height_dogriver:  stationMap['02479000']?.gage  ?? null,
+    gage_height_mobilei65: stationMap['02469761']?.gage  ?? null,
+    ortho_p_dogriver:      stationMap['02479000']?.orthoP ?? null,
+    total_n_mobilei65:     stationMap['02469761']?.totalN ?? null,
     // ── NERRS Weeks Bay ──────────────────────────────────────────────────────
     ...nerrsValues,
+    // ── NERRS Meteorological ────────────────────────────────────────────────
+    ...nerrsMetValues,
     // ── HF Radar ─────────────────────────────────────────────────────────────
     ...hfValues,
     // ── Lag / transport ──────────────────────────────────────────────────────
@@ -326,12 +375,15 @@ export async function persistTick(data = {}) {
     for (const s of usgs) {
       const r = s.readings || {}
       const paramMap = {
-        do_mg_l:           [safeNum(r.do_mg_l),           'mg/L'],
-        water_temp_c:      [safeNum(r.water_temp_c),      '°C'],
-        streamflow_cfs:    [safeNum(r.streamflow_cfs),    'cfs'],
-        pH:                [safeNum(r.pH),                ''],
-        turbidity_ntu:     [safeNum(r.turbidity_ntu),     'NTU'],
-        conductance_us_cm: [safeNum(r.conductance_us_cm), 'µS/cm'],
+        do_mg_l:            [safeNum(r.do_mg_l),              'mg/L'],
+        water_temp_c:       [safeNum(r.water_temp_c),         '°C'],
+        streamflow_cfs:     [safeNum(r.streamflow_cfs),       'cfs'],
+        pH:                 [safeNum(r.pH),                   ''],
+        turbidity_ntu:      [safeNum(r.turbidity_ntu),        'NTU'],
+        conductance_us_cm:  [safeNum(r.conductance_us_cm),    'µS/cm'],
+        gage_height_ft:     [safeNum(r.gage_height_ft),       'ft'],
+        orthophosphate_mg_l:[safeNum(r.orthophosphate_mg_l),  'mg/L'],
+        total_nitrogen_mg_l:[safeNum(r.total_nitrogen_mg_l),  'mg/L'],
       }
       for (const [param, [val, unit]] of Object.entries(paramMap)) {
         if (val != null) rows.push([ts, 'usgs', s.siteNo, param, val, unit])

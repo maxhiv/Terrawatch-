@@ -8,6 +8,17 @@ import { buildFeatureVector, autoLabel, THRESHOLDS } from '../services/crossSens
 
 const router = express.Router()
 
+router.get('/live-vector', async (req, res) => {
+  try {
+    const getData = req.app.locals.getLatestData
+    const data = getData ? getData() : {}
+    const vector = buildFeatureVector(data)
+    res.json({ vector, keyCount: Object.keys(vector).length, nonNull: Object.values(vector).filter(v => v != null).length })
+  } catch (err) {
+    res.json({ error: err.message, vector: {} })
+  }
+})
+
 router.get('/status', async (req, res) => {
   try {
     const [stats, models, events] = await Promise.all([

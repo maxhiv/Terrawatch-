@@ -34,12 +34,20 @@ const STATIONS = [
   { id:'wekaswq', short:'Weeks Bay NERR', lat:30.4167, lon:-87.8250, type:'nerr' },
 ]
 
+const LIVE_OVERLAYS = [
+  { id:'currents', label:'Currents', icon:'〜', color:'#3b82f6' },
+  { id:'wind',     label:'Wind',     icon:'≈', color:'#10b981' },
+  { id:'waves',    label:'Waves',    icon:'≋', color:'#8b5cf6' },
+  { id:'solar',    label:'Solar/UV', icon:'☀', color:'#f59e0b' },
+]
+
 export default function MapPage() {
-  const { waterQuality, nerrs } = useStore()
+  const { waterQuality, nerrs, hfradar, weather, landStatus } = useStore()
   const mapRef = useRef(null)
   const leafMap = useRef(null)
   const gibsLayer = useRef(null)
   const markersRef = useRef([])
+  const overlayLayersRef = useRef([])
 
   const [activeGibs, setActiveGibs] = useState('none')
   const [daysBack, setDaysBack] = useState(0)
@@ -47,6 +55,7 @@ export default function MapPage() {
   const [showLabels, setShowLabels] = useState(true)
   const [selected, setSelected] = useState(null)
   const [ready, setReady] = useState(false)
+  const [liveOverlays, setLiveOverlays] = useState({})
 
   const cfg = GIBS.find(g=>g.id===activeGibs)
 
@@ -122,6 +131,85 @@ export default function MapPage() {
     })
   }, [ready, waterQuality, nerrs, showLabels, getData])
 
+  useEffect(() => {
+    const map = leafMap.current
+    if (!map || !ready) return
+    overlayLayersRef.current.forEach(l => map.removeLayer(l))
+    overlayLayersRef.current = []
+
+    if (liveOverlays.currents && hfradar?.available) {
+      const speed = hfradar.avgSpeed_ms || 0.1
+      const dir = (hfradar.direction_deg ?? hfradar.avgDirection_deg ?? 0) * Math.PI / 180
+      const pts = [[30.45,-87.9],[30.35,-87.85],[30.55,-87.95],[30.4,-88.0],[30.5,-87.8]]
+      pts.forEach(([lat,lon]) => {
+        const endLat = lat + Math.cos(dir)*0.03*speed
+        const endLon = lon + Math.sin(dir)*0.03*speed
+        const arrow = L.polyline([[lat,lon],[endLat,endLon]], {color:'#3b82f6',weight:2,opacity:0.8})
+        const head = L.circleMarker([endLat,endLon], {radius:3,color:'#3b82f6',fillColor:'#3b82f6',fillOpacity:1})
+        arrow.addTo(map); head.addTo(map)
+        overlayLayersRef.current.push(arrow, head)
+      })
+    }
+
+    if (liveOverlays.wind) {
+      const windSources = []
+      if (weather?.current) windSources.push({lat:30.69,lon:-88.04,spd:safeNum(weather.current.wind_speed_mph)||0,dir:safeNum(weather.current.wind_direction)||0,c:'#10b981',label:'NWS'})
+      const buoy = waterQuality?.buoy
+      if (buoy) windSources.push({lat:30.065,lon:-87.555,spd:safeNum(buoy.WSPD)||0,dir:safeNum(buoy.WDIR)||0,c:'#f59e0b',label:'Buoy'})
+      const nerrsM = nerrs?.meteorological?.latest
+      if (nerrsM?.WSpd?.value) windSources.push({lat:30.4167,lon:-87.825,spd:parseFloat(nerrsM.WSpd.value),dir:parseFloat(nerrsM.Wdir?.value||0),c:'#7c3aed',label:'NERR'})
+      windSources.forEach(w => {
+        const rad = w.dir * Math.PI / 180
+        const len = Math.min(w.spd * 0.004, 0.08)
+        const endLat = w.lat + Math.cos(rad) * len
+        const endLon = w.lon + Math.sin(rad) * len
+        const arrow = L.polyline([[w.lat,w.lon],[endLat,endLon]], {color:w.c,weight:3,opacity:0.9})
+        const tip = L.circleMarker([endLat,endLon], {radius:4,color:w.c,fillColor:w.c,fillOpacity:1})
+        const lbl = L.tooltip({permanent:true,direction:'right',offset:[6,0],className:'leaflet-label-tw'})
+        lbl.setContent(`${w.label} ${w.spd.toFixed(0)}`)
+        tip.bindTooltip(lbl)
+        arrow.addTo(map); tip.addTo(map)
+        overlayLayersRef.current.push(arrow, tip)
+      })
+    }
+
+    if (liveOverlays.waves && waterQuality?.buoy) {
+      const b = waterQuality.buoy
+      const wvht = safeNum(b.WVHT) || 0
+      const mwd = safeNum(b.MWD) || 0
+      const ring = L.circleMarker([30.065,-87.555], {radius:8+wvht*6,color:'#8b5cf6',fillColor:'#8b5cf6',fillOpacity:0.2,weight:2})
+      ring.bindTooltip(`Waves: ${wvht.toFixed(1)}m @ ${(safeNum(b.DPD)||0).toFixed(0)}s`, {direction:'top'})
+      ring.addTo(map)
+      overlayLayersRef.current.push(ring)
+      const rad = mwd * Math.PI / 180
+      const endLat = 30.065 + Math.cos(rad)*0.06
+      const endLon = -87.555 + Math.sin(rad)*0.06
+      const dirLine = L.polyline([[30.065,-87.555],[endLat,endLon]], {color:'#8b5cf6',weight:2,dashArray:'5,5'})
+      dirLine.addTo(map)
+      overlayLayersRef.current.push(dirLine)
+    }
+
+    if (liveOverlays.solar) {
+      const uv = safeNum(landStatus?.openMeteo?.current?.uv_index)
+      if (uv != null) {
+        const uvColor = uv > 8 ? '#dc2626' : uv > 5 ? '#f59e0b' : '#10b981'
+        const uvRing = L.circleMarker([30.45,-87.9], {radius:20,color:uvColor,fillColor:uvColor,fillOpacity:0.15,weight:2})
+        uvRing.bindTooltip(`UV Index: ${uv.toFixed(1)}`, {permanent:true,direction:'top',className:'leaflet-label-tw'})
+        uvRing.addTo(map)
+        overlayLayersRef.current.push(uvRing)
+      }
+      const par = nerrs?.meteorological?.latest?.TotPAR?.value
+      if (par != null) {
+        const parRing = L.circleMarker([30.4167,-87.825], {radius:14,color:'#f59e0b',fillColor:'#f59e0b',fillOpacity:0.2,weight:2})
+        parRing.bindTooltip(`PAR: ${parseFloat(par).toFixed(0)} mmol/m2`, {direction:'bottom'})
+        parRing.addTo(map)
+        overlayLayersRef.current.push(parRing)
+      }
+    }
+  }, [ready, liveOverlays, hfradar, weather, waterQuality, nerrs, landStatus])
+
+  const toggleOverlay = (id) => setLiveOverlays(prev => ({...prev, [id]: !prev[id]}))
+
   return (
     <div className="flex flex-col" style={{height:'100vh'}}>
       <div className="flex-shrink-0 px-4 py-2.5 bg-white border-b border-bay-100">
@@ -158,6 +246,17 @@ export default function MapPage() {
               </div>
             </>
           )}
+          <div className="h-5 w-px bg-bay-100" />
+          <div className="flex items-center gap-1">
+            <span className="tw-label">Live:</span>
+            {LIVE_OVERLAYS.map(lo=>(
+              <button key={lo.id} onClick={()=>toggleOverlay(lo.id)}
+                className="text-[10px] px-2 py-1 rounded-lg border font-medium transition-all"
+                style={liveOverlays[lo.id]?{background:lo.color,color:'#fff',borderColor:lo.color}:{background:'#fff',color:'#4a7060',borderColor:'#cce4d8'}}>
+                {lo.icon} {lo.label}
+              </button>
+            ))}
+          </div>
           <div className="ml-auto flex items-center gap-2">
             <button onClick={()=>setShowLabels(s=>!s)}
               className={clsx('text-[10px] px-2.5 py-1 rounded-lg border font-medium',showLabels?'bg-teal-50 text-teal-700 border-teal-200':'bg-white text-bay-400 border-bay-200')}>

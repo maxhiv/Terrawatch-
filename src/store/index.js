@@ -22,6 +22,7 @@ export const useStore = create((set, get) => ({
   landStatus: null,
   airplusStatus: null,
   goesStatus: null,
+  goesLatest: null,
 
   lastUpdated: null,
   lastFetchedAt: {},
@@ -216,5 +217,13 @@ export const useStore = create((set, get) => ({
       const data = await res.json()
       set(s => ({ goesStatus: data, lastFetchedAt: { ...s.lastFetchedAt, goes: Date.now() } }))
     } catch (e) { console.error('[Store] GOES status error:', e) }
+  },
+
+  fetchGoesLatest: async () => {
+    try {
+      const res = await fetch(`${API}/api/goes19/db`)
+      const data = await res.json()
+      set(s => ({ goesLatest: data?.readings || null, lastFetchedAt: { ...s.lastFetchedAt, goesLatest: Date.now() } }))
+    } catch (e) { console.error('[Store] GOES latest error:', e) }
   },
 }))

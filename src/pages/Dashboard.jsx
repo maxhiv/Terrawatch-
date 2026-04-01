@@ -15,9 +15,9 @@ function safeVal(v) {
 export default function Dashboard() {
   const {
     waterQuality, habAssessment, weather, alerts, loading,
-    nerrs, hfradar, aqi, goesStatus, ecologyStatus, sensors, landStatus,
-    fetchAll, fetchNERRS, fetchHFRadar, fetchAQI, fetchGOESStatus,
-    fetchEcologyStatus, fetchLandStatus, lastUpdated, lastFetchedAt
+    nerrs, hfradar, aqi, goesStatus, goesLatest, ecologyStatus, sensors, landStatus, airplusStatus,
+    fetchAll, fetchNERRS, fetchHFRadar, fetchAQI, fetchGOESStatus, fetchGoesLatest,
+    fetchEcologyStatus, fetchLandStatus, fetchAirPlusStatus, lastUpdated, lastFetchedAt
   } = useStore()
 
   const isLoading = Object.values(loading).some(Boolean)
@@ -27,8 +27,10 @@ export default function Dashboard() {
     fetchHFRadar()
     fetchAQI()
     fetchGOESStatus()
+    fetchGoesLatest()
     fetchEcologyStatus()
     fetchLandStatus()
+    fetchAirPlusStatus()
   }, [])
 
   const habProb = habAssessment?.hab?.probability
@@ -68,6 +70,17 @@ export default function Dashboard() {
 
   const inatCount = ecologyStatus?.iNaturalist?.totalCount
   const totalSensors = sensors?.summary?.active || 0
+
+  const uvIndex = safeVal(landStatus?.openMeteo?.current?.uv_index)
+  const windGustMph = safeVal(weather?.current?.wind_gust_mph)
+  const pm25Purple = safeVal(airplusStatus?.purpleAir?.avgPM25)
+  const pm25OpenAQ = safeVal(airplusStatus?.openAQ?.avgPM25)
+  const pm25 = pm25Purple ?? pm25OpenAQ
+  const pm25Source = pm25Purple != null ? 'PurpleAir' : 'OpenAQ'
+
+  const goesBloom = safeVal(goesLatest?.bloom_index)
+  const goesCloud = safeVal(goesLatest?.cloud_coverage)
+  const goesGlm = safeVal(goesLatest?.glm_flashes)
 
   const habSparkData = habTimeline.map(m => ({ v: m.probability }))
   const forecastTemps = landStatus?.openMeteo?.dailyForecast?.map(d => ({ v: d.high_c })) || []
@@ -110,6 +123,17 @@ export default function Dashboard() {
         </AlertBanner>
       )}
 
+      {(goesBloom != null || goesGlm != null) && (
+        <div className="tw-card mb-4 tw-glass-tint-green" style={{borderLeft:'3px solid #d97706'}}>
+          <div className="flex items-center gap-4 flex-wrap">
+            <div className="tw-label text-orange-600">GOES-19 Intelligence</div>
+            {goesBloom != null && <span className="tw-mono text-xs"><strong>Bloom Index:</strong> {goesBloom.toFixed(2)}</span>}
+            {goesCloud != null && <span className="tw-mono text-xs"><strong>Cloud:</strong> {goesCloud.toFixed(0)}%</span>}
+            {goesGlm != null && <span className="tw-mono text-xs"><strong>Lightning:</strong> {goesGlm} flashes</span>}
+          </div>
+        </div>
+      )}
+
       <Section title="Current Conditions">
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           <StatCard label="HAB Probability" value={habProb != null ? habProb : '—'} unit="%" color={habProb >= 65 ? '#dc2626' : habProb >= 45 ? '#d97706' : '#0a9e80'} icon="⬡" sub={habLevel ? <RiskBadge level={habLevel} /> : 'Calculating...'} riskLevel={habLevel} freshness={lastFetchedAt.hab} sparkData={habSparkData} sparkColor={habProb >= 65 ? '#dc2626' : '#d97706'} />
@@ -127,8 +151,12 @@ export default function Dashboard() {
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           <StatCard label="GOES-19 SST" value={goesSst != null ? goesSst.toFixed(1) : '—'} unit="°C" color="#d97706" icon="🛰️" sub={goesSst != null ? (goesSstSource === 'push' ? 'Push pipeline · 5-min' : 'Gulf of Mexico · Hourly') : 'Gulf of Mexico · Hourly'} freshness={lastFetchedAt.goes} />
           <StatCard label="Air Quality" value={aqiVal ?? '—'} unit="AQI" color={aqiVal > 100 ? '#dc2626' : aqiVal > 50 ? '#f59e0b' : '#10b981'} icon="🌬️" sub={aqiCat || 'AirNow'} alert={aqiVal > 100} freshness={lastFetchedAt.aqi} sparkData={(aqi?.readings || []).map(r => ({ v: r.aqi || 0 }))} sparkColor={aqiVal > 100 ? '#dc2626' : '#10b981'} />
+          <StatCard label="UV Index" value={uvIndex != null ? uvIndex.toFixed(1) : '—'} color={uvIndex > 8 ? '#dc2626' : uvIndex > 5 ? '#f59e0b' : '#10b981'} icon="☀️" sub={uvIndex != null ? (uvIndex > 8 ? 'Very High' : uvIndex > 5 ? 'High' : uvIndex > 2 ? 'Moderate' : 'Low') : 'Open-Meteo'} alert={uvIndex > 8} freshness={lastFetchedAt.sensors} />
+          <StatCard label="Wind Gust" value={windGustMph != null ? windGustMph.toFixed(0) : '—'} unit="mph" color={windGustMph > 30 ? '#dc2626' : '#0a9e80'} icon="💨" sub="NWS max gust" alert={windGustMph > 30} freshness={lastFetchedAt.weather} />
+          <StatCard label="PM2.5" value={pm25 != null ? pm25.toFixed(1) : '—'} unit="µg/m³" color={pm25 > 35 ? '#dc2626' : pm25 > 12 ? '#f59e0b' : '#10b981'} icon="🌫️" sub={pm25Source} alert={pm25 > 35} freshness={lastFetchedAt.sensors} />
           <StatCard label="Biodiversity" value={inatCount ?? '—'} unit="obs" color="#16a34a" icon="🦎" sub="iNaturalist 7-day" freshness={lastFetchedAt.sensors} />
           <StatCard label="Active Feeds" value={totalSensors || '—'} color="#0a9e80" icon="⊞" sub={`${sensors?.summary?.totalActiveFeeds || '—'} total feeds`} freshness={lastFetchedAt.sensors} />
+          <StatCard label="Feature Vector" value="141" unit="keys" color="#7c3aed" icon="⊡" sub="ML input features" freshness={lastFetchedAt.sensors} />
         </div>
       </Section>
 

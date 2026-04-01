@@ -109,6 +109,7 @@ if (existsSync(join(distPath, 'index.html'))) {
 
 function getGoesLatest() { return _latestData.goesLatest || {} }
 app.locals.getGoesLatest = getGoesLatest
+app.locals.getLatestData = () => _latestData
 
 let _latestData = {
   waterQuality: { usgs: [], coops: {} },

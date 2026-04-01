@@ -34,16 +34,22 @@ export async function getAllCoopsConditions() {
   const results = {}
   await Promise.allSettled(
     Object.entries(COOPS_STATIONS).map(async ([id, name]) => {
-      const [wl, wt, sal] = await Promise.all([
+      const [wl, wt, sal, wind, airP, airT] = await Promise.all([
         getCoopsData(id, 'water_level', 2),
         getCoopsData(id, 'water_temperature', 2),
         getCoopsData(id, 'salinity', 2),
+        getCoopsData(id, 'wind', 2),
+        getCoopsData(id, 'air_pressure', 2),
+        getCoopsData(id, 'air_temperature', 2),
       ])
       results[id] = {
         name, id,
         water_level: wl.at(-1) || null,
         water_temperature: wt.at(-1) || null,
         salinity: sal.at(-1) || null,
+        wind: wind.at(-1) || null,
+        air_pressure: airP.at(-1) || null,
+        air_temperature: airT.at(-1) || null,
       }
     })
   )
@@ -67,10 +73,16 @@ export async function getMobileWeather() {
       forecast: forecastResp?.data?.properties?.periods?.slice(0, 7) || [],
       current: {
         temp_f: obs.temperature?.value != null ? (obs.temperature.value * 9) / 5 + 32 : null,
+        temp_c: obs.temperature?.value ?? null,
         wind_speed_mph: obs.windSpeed?.value != null ? obs.windSpeed.value * 0.621371 : null,
+        wind_speed_ms: obs.windSpeed?.value != null ? obs.windSpeed.value / 3.6 : null,
+        wind_gust_mph: obs.windGust?.value != null ? obs.windGust.value * 0.621371 : null,
+        wind_gust_ms: obs.windGust?.value != null ? obs.windGust.value / 3.6 : null,
         wind_direction: obs.windDirection?.value,
         humidity: obs.relativeHumidity?.value,
+        dewpoint_c: obs.dewpoint?.value ?? null,
         pressure_mb: obs.barometricPressure?.value != null ? obs.barometricPressure.value / 100 : null,
+        visibility_m: obs.visibility?.value ?? null,
         description: obs.textDescription,
         timestamp: obs.timestamp,
       },

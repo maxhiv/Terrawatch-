@@ -20,7 +20,7 @@ Planetary Environmental Intelligence Platform — Mobile Bay & Gulf Coast
 
 - **Fast cron (3min)**: USGS, CO-OPS, NERRS, HF Radar, AirNow, GOES-19 DB lookup, NDBC Buoy 42012, NWS Weather
 - **Slow cron (15min)**: Satellite (NASA CMR), Ocean models (HYCOM/CMEMS), Ecology (iNaturalist/GBIF/eBird), Land/Weather (Open-Meteo/AHPS), Air Quality (EPA AQS/OpenAQ/PurpleAir)
-- **ML feature vector**: 95+ features from 15 live data sources per tick
+- **ML feature vector**: 141 features from 15+ live data sources per tick
 - **HAB Oracle v2**: 10-factor weighted ensemble (6 legacy + 4 GOES-19 factors: stratification, rainfall nutrient pulse, satellite bloom signal, GLM lightning mixing)
 
 ## GOES-19 Dual-Track Architecture
@@ -35,15 +35,16 @@ Planetary Environmental Intelligence Platform — Mobile Bay & Gulf Coast
 ```
 terrawatch/
 ├── src/                        # React frontend
-│   ├── pages/                  # 14 page components
-│   │   ├── Dashboard.jsx       # Main environmental dashboard
+│   ├── pages/                  # 16 page components
+│   │   ├── Dashboard.jsx       # Main environmental dashboard (GOES alert strip, UV/gust/PM2.5 cards)
 │   │   ├── HabOracle.jsx       # HAB prediction (World First™)
 │   │   ├── HypoxiaForecast.jsx # Hypoxia risk forecasting
 │   │   ├── WaterQuality.jsx    # Interactive water quality map
 │   │   ├── SensorsRegistry.jsx # Data feed registry
 │   │   ├── WetlandAI.jsx       # Wetland pre-delineation
 │   │   ├── SITEVAULT.jsx       # Site assessment vault
-│   │   ├── MapPage.jsx         # Satellite map view
+│   │   ├── MapPage.jsx         # Satellite map view (4 live overlay layers: currents/wind/waves/solar)
+│   │   ├── DataStream.jsx      # 141-key feature vector explorer (9 tabs)
 │   │   ├── ScienceView.jsx     # Science data explorer
 │   │   ├── FeedStatus.jsx      # Live feed status dashboard
 │   │   ├── Alerts.jsx          # Alert center
@@ -53,7 +54,7 @@ terrawatch/
 │   ├── components/
 │   │   ├── Common/index.jsx    # StatCard (glass, risk tints, sparklines, freshness), PageHeader, RiskBadge, Spinner, SkeletonCard, SkeletonRow, Section, EmptyState, AlertBanner
 │   │   ├── Charts/index.jsx    # DOChart, HABProbabilityChart, WeatherForecastChart, AirQualityChart, SatelliteTimelineChart, OceanConditionsChart
-│   │   └── Layout/Layout.jsx   # Sidebar navigation (16 routes)
+│   │   └── Layout/Layout.jsx   # Sidebar navigation (18 routes, "141 KEYS" DataStream badge)
 │   ├── store/index.js          # Zustand store (all API fetchers)
 │   ├── App.jsx                 # Router with nested Layout routes
 │   ├── main.jsx                # React entry point

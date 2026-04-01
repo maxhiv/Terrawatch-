@@ -4,7 +4,7 @@ import clsx from 'clsx'
 import {
   LayoutDashboard, FlaskConical, Waves, Droplets, Satellite,
   Microscope, Brain, Radio, Activity, TreePine, Database,
-  Bell, Bot, Cpu, Sparkles, Map as MapIcon
+  Bell, Bot, Cpu, Sparkles, Map as MapIcon, BarChart3
 } from 'lucide-react'
 
 const NAV = [
@@ -17,6 +17,7 @@ const NAV = [
   { path: '/intelligence', label: 'Intelligence', Icon: Brain, badge: 'ML' },
   { path: '/sensors', label: 'Sensor Registry', Icon: Radio },
   { path: '/feeds', label: 'Feed Status', Icon: Activity },
+  { path: '/data-stream', label: 'DataStream', Icon: BarChart3, badge: '141 KEYS' },
   null,
   { path: '/wetlandai', label: 'WetlandAI', Icon: TreePine, badge: 'WORLD FIRST' },
   { path: '/sitevault', label: 'SITEVAULT', Icon: Database },

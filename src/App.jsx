@@ -17,6 +17,7 @@ import ScienceView from './pages/ScienceView.jsx'
 import Intelligence from './pages/Intelligence.jsx'
 import AlertsPage from './pages/Alerts.jsx'
 import AIAssistant from './pages/AIAssistant.jsx'
+const DataStream = React.lazy(() => import('./pages/DataStream.jsx'))
 const MasterRoadmap = React.lazy(() => import('./pages/MasterRoadmap.jsx'))
 
 export default function App() {
@@ -49,6 +50,7 @@ export default function App() {
           <Route path="feeds" element={<FeedStatus />} />
           <Route path="science" element={<ScienceView />} />
           <Route path="intelligence" element={<Intelligence />} />
+          <Route path="data-stream" element={<Suspense fallback={<div style={{padding:40,textAlign:'center',color:'#6b7280'}}>Loading DataStream…</div>}><DataStream /></Suspense>} />
           <Route path="vision" element={<VisionPage />} />
           <Route path="roadmap" element={<Suspense fallback={<div style={{padding:40,textAlign:'center',color:'#6b7280'}}>Loading Roadmap…</div>}><MasterRoadmap /></Suspense>} />
           <Route path="ml-architecture" element={<MLArchitecture />} />
