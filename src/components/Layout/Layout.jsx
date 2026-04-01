@@ -95,7 +95,7 @@ export default function Layout() {
                 <span className="flex-1 leading-tight">{item.label}</span>
                 {item.badge && (
                   <span className="tw-mono text-[7px] px-1 py-0.5 rounded bg-teal-100/70 text-teal-700 font-bold leading-none backdrop-blur-sm">
-                    ★
+                    {item.badge}
                   </span>
                 )}
                 {item.path === '/alerts' && alerts.length > 0 && (

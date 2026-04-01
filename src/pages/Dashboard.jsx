@@ -123,16 +123,26 @@ export default function Dashboard() {
         </AlertBanner>
       )}
 
-      {(goesBloom != null || goesGlm != null) && (
-        <div className="tw-card mb-4 tw-glass-tint-green" style={{borderLeft:'3px solid #d97706'}}>
-          <div className="flex items-center gap-4 flex-wrap">
-            <div className="tw-label text-orange-600">GOES-19 Intelligence</div>
-            {goesBloom != null && <span className="tw-mono text-xs"><strong>Bloom Index:</strong> {goesBloom.toFixed(2)}</span>}
-            {goesCloud != null && <span className="tw-mono text-xs"><strong>Cloud:</strong> {goesCloud.toFixed(0)}%</span>}
-            {goesGlm != null && <span className="tw-mono text-xs"><strong>Lightning:</strong> {goesGlm} flashes</span>}
+      {(goesBloom != null || goesGlm != null || goesSst != null) && (() => {
+        const goesGrad = safeVal(goesLatest?.sst_gradient)
+        const goesQpe = safeVal(goesLatest?.qpe_rainfall)
+        const stratAlert = goesGrad != null && goesGrad >= 3.5
+        const nutrientPulse = goesQpe != null && goesQpe > 10
+        return (
+          <div className="tw-card mb-4 tw-glass-tint-green" style={{borderLeft:`3px solid ${stratAlert ? '#dc2626' : '#d97706'}`}}>
+            <div className="flex items-center gap-4 flex-wrap">
+              <div className="tw-label text-orange-600">GOES-19 Intelligence</div>
+              {stratAlert && <span className="tw-mono text-[10px] px-1.5 py-0.5 rounded bg-red-100 text-red-700 font-bold">STRATIFICATION ALERT</span>}
+              {nutrientPulse && <span className="tw-mono text-[10px] px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 font-bold">NUTRIENT PULSE</span>}
+              {goesBloom != null && <span className="tw-mono text-xs"><strong>Bloom:</strong> {goesBloom.toFixed(2)}</span>}
+              {goesGrad != null && <span className="tw-mono text-xs"><strong>SST Gradient:</strong> {goesGrad.toFixed(1)}°C/km</span>}
+              {goesCloud != null && <span className="tw-mono text-xs"><strong>Cloud:</strong> {goesCloud.toFixed(0)}%</span>}
+              {goesQpe != null && <span className="tw-mono text-xs"><strong>QPE:</strong> {goesQpe.toFixed(1)} mm</span>}
+              {goesGlm != null && <span className="tw-mono text-xs"><strong>Lightning:</strong> {goesGlm} flashes</span>}
+            </div>
           </div>
-        </div>
-      )}
+        )
+      })()}
 
       <Section title="Current Conditions">
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">

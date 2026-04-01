@@ -390,12 +390,21 @@ export async function persistTick(data = {}) {
       }
     }
 
-    // ── NERRS Weeks Bay ───────────────────────────────────────────────────────
+    // ── NERRS Weeks Bay Water Quality ──────────────────────────────────────────
     if (nerrs?.waterQuality?.latest) {
       const wb = nerrs.waterQuality.latest
-      const nerrsParams = ['DO_mgl','Temp','Sal','Turb','ChlFluor','SpCond','pH']
+      const nerrsParams = ['DO_mgl','DO_pct','Temp','Sal','Turb','ChlFluor','SpCond','pH','Depth','Level']
       for (const p of nerrsParams) {
         if (wb[p]?.value != null) rows.push([ts, 'nerrs', 'wekaswq', p, wb[p].value, wb[p].unit||''])
+      }
+    }
+
+    // ── NERRS Weeks Bay Meteorological ──────────────────────────────────────
+    if (nerrs?.meteorological?.latest) {
+      const met = nerrs.meteorological.latest
+      const metParams = ['WSpd','MaxWSpd','Wdir','ATemp','BP','TotPAR','TotPrec','RH']
+      for (const p of metParams) {
+        if (met[p]?.value != null) rows.push([ts, 'nerrs_met', 'wekaswq', p, met[p].value, met[p].unit||''])
       }
     }
 
@@ -409,18 +418,31 @@ export async function persistTick(data = {}) {
 
     // ── NDBC Buoy 42012 ───────────────────────────────────────────────────────
     const buoy = data.buoy
-    if (buoy?.WTMP != null) rows.push([ts, 'ndbc', '42012', 'water_temp_c',  buoy.WTMP,  '°C'])
-    if (buoy?.WSPD != null) rows.push([ts, 'ndbc', '42012', 'wind_speed_ms', buoy.WSPD,  'm/s'])
-    if (buoy?.WDIR != null) rows.push([ts, 'ndbc', '42012', 'wind_dir_deg',  buoy.WDIR,  '°'])
-    if (buoy?.PRES != null) rows.push([ts, 'ndbc', '42012', 'pressure_mb',   buoy.PRES,  'mb'])
-    if (buoy?.WVHT != null) rows.push([ts, 'ndbc', '42012', 'wave_height_m', buoy.WVHT,  'm'])
+    if (buoy?.WTMP != null) rows.push([ts, 'ndbc', '42012', 'water_temp_c',      buoy.WTMP,  '°C'])
+    if (buoy?.WSPD != null) rows.push([ts, 'ndbc', '42012', 'wind_speed_ms',     buoy.WSPD,  'm/s'])
+    if (buoy?.GST  != null) rows.push([ts, 'ndbc', '42012', 'wind_gust_ms',      buoy.GST,   'm/s'])
+    if (buoy?.WDIR != null) rows.push([ts, 'ndbc', '42012', 'wind_dir_deg',      buoy.WDIR,  '°'])
+    if (buoy?.ATMP != null) rows.push([ts, 'ndbc', '42012', 'air_temp_c',        buoy.ATMP,  '°C'])
+    if (buoy?.PRES != null) rows.push([ts, 'ndbc', '42012', 'pressure_mb',       buoy.PRES,  'mb'])
+    if (buoy?.WVHT != null) rows.push([ts, 'ndbc', '42012', 'wave_height_m',     buoy.WVHT,  'm'])
+    if (buoy?.DPD  != null) rows.push([ts, 'ndbc', '42012', 'dom_wave_period_s', buoy.DPD,   's'])
+    if (buoy?.APD  != null) rows.push([ts, 'ndbc', '42012', 'avg_wave_period_s', buoy.APD,   's'])
+    if (buoy?.MWD  != null) rows.push([ts, 'ndbc', '42012', 'mean_wave_dir',     buoy.MWD,   '°'])
+    if (buoy?.DEWP != null) rows.push([ts, 'ndbc', '42012', 'dewpoint_c',        buoy.DEWP,  '°C'])
 
     // ── NWS weather ────────────────────────────────────────────────────────────
     const wx = data.weather?.current || {}
-    if (wx.wind_speed_mph != null) rows.push([ts, 'nws', 'KMOB', 'wind_speed_mph', wx.wind_speed_mph, 'mph'])
+    if (wx.wind_speed_mph  != null) rows.push([ts, 'nws', 'KMOB', 'wind_speed_mph', wx.wind_speed_mph, 'mph'])
+    if (wx.wind_speed_ms   != null) rows.push([ts, 'nws', 'KMOB', 'wind_speed_ms',  wx.wind_speed_ms,  'm/s'])
+    if (wx.wind_gust_mph   != null) rows.push([ts, 'nws', 'KMOB', 'wind_gust_mph',  wx.wind_gust_mph,  'mph'])
+    if (wx.wind_gust_ms    != null) rows.push([ts, 'nws', 'KMOB', 'wind_gust_ms',   wx.wind_gust_ms,   'm/s'])
     if (wx.wind_direction  != null) rows.push([ts, 'nws', 'KMOB', 'wind_dir_deg',   wx.wind_direction,  '°'])
     if (wx.temp_f          != null) rows.push([ts, 'nws', 'KMOB', 'temp_f',         wx.temp_f,          '°F'])
+    if (wx.temp_c          != null) rows.push([ts, 'nws', 'KMOB', 'temp_c',         wx.temp_c,          '°C'])
+    if (wx.humidity        != null) rows.push([ts, 'nws', 'KMOB', 'humidity_pct',    wx.humidity,        '%'])
+    if (wx.dewpoint_c      != null) rows.push([ts, 'nws', 'KMOB', 'dewpoint_c',     wx.dewpoint_c,      '°C'])
     if (wx.pressure_mb     != null) rows.push([ts, 'nws', 'KMOB', 'pressure_mb',    wx.pressure_mb,     'mb'])
+    if (wx.visibility_m    != null) rows.push([ts, 'nws', 'KMOB', 'visibility_m',   wx.visibility_m,    'm'])
 
     // ── Ecology ───────────────────────────────────────────────────────────────
     if (ecology?.iNaturalist?.totalCount != null)
@@ -430,11 +452,24 @@ export async function persistTick(data = {}) {
     if (ecology?.eBird?.mobileBayObs != null)
       rows.push([ts, 'ecology', 'ebird', 'mobile_bay_obs_7d', ecology.eBird.mobileBayObs, 'count'])
 
+    // ── CO-OPS expanded ────────────────────────────────────────────────────────
+    const coopsData = data.waterQuality?.coops || {}
+    for (const [stId, st] of Object.entries(coopsData)) {
+      if (st.wind != null)            rows.push([ts, 'coops', stId, 'wind_speed',      typeof st.wind === 'object' ? st.wind.value : st.wind, 'm/s'])
+      if (st.air_pressure != null)    rows.push([ts, 'coops', stId, 'air_pressure_mb', typeof st.air_pressure === 'object' ? st.air_pressure.value : st.air_pressure, 'mb'])
+      if (st.air_temperature != null) rows.push([ts, 'coops', stId, 'air_temp_c',      typeof st.air_temperature === 'object' ? st.air_temperature.value : st.air_temperature, '°C'])
+    }
+
     // ── Land + weather ────────────────────────────────────────────────────────
-    const precip = land?.openMeteo?.current?.precip_mm
-    if (precip != null) rows.push([ts, 'land', 'openmeteo', 'precip_mm', precip, 'mm'])
-    const cape = land?.openMeteo?.current?.cape
-    if (cape != null) rows.push([ts, 'land', 'openmeteo', 'cape_jkg', cape, 'J/kg'])
+    const omCur = land?.openMeteo?.current || {}
+    if (omCur.precip_mm    != null) rows.push([ts, 'land', 'openmeteo', 'precip_mm',    omCur.precip_mm,    'mm'])
+    if (omCur.cape         != null) rows.push([ts, 'land', 'openmeteo', 'cape_jkg',     omCur.cape,         'J/kg'])
+    if (omCur.solar_rad_wm2!= null) rows.push([ts, 'land', 'openmeteo', 'solar_rad_wm2',omCur.solar_rad_wm2,'W/m²'])
+    if (omCur.uv_index     != null) rows.push([ts, 'land', 'openmeteo', 'uv_index',     omCur.uv_index,     ''])
+    if (omCur.lifted_index  != null) rows.push([ts, 'land', 'openmeteo', 'lifted_index', omCur.lifted_index,  ''])
+    if (omCur.soil_moisture != null) rows.push([ts, 'land', 'openmeteo', 'soil_moisture',omCur.soil_moisture, 'm³/m³'])
+    if (omCur.cin          != null) rows.push([ts, 'land', 'openmeteo', 'cin',          omCur.cin,          'J/kg'])
+    if (omCur.blh          != null) rows.push([ts, 'land', 'openmeteo', 'blh',          omCur.blh,          'm'])
     if (land?.ahps?.stage != null) rows.push([ts, 'land', 'ahps', 'flood_stage_ft', land.ahps.stage, 'ft'])
 
     // ── Air quality ───────────────────────────────────────────────────────────
