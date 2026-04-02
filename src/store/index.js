@@ -24,23 +24,30 @@ export const useStore = create((set, get) => ({
   goesStatus: null,
   goesLatest: null,
 
+  flood: null,
+  beach: null,
+  climate: null,
+  pollution: null,
+  inference: null,
+  sourceHealth: null,
+  adphClosures: null,
+  weatherForecast: null,
+
   lastUpdated: null,
   lastFetchedAt: {},
   liveMode: true,
-  loading: { water: false, hab: false, weather: false, alerts: false },
+  loading: { water: false, hab: false, weather: false, alerts: false, flood: false, beach: false, climate: false, pollution: false },
 
   toggleLiveMode: () => set(s => ({ liveMode: !s.liveMode })),
 
   fetchAll: async () => {
-    const {
-      fetchWater, fetchHAB, fetchWeather, fetchAlerts, fetchSensors,
-      fetchSatelliteStatus, fetchOceanStatus, fetchEcologyStatus,
-      fetchLandStatus, fetchAirPlusStatus, fetchGOESStatus, fetchGoesLatest,
-    } = get()
+    const s = get()
     await Promise.allSettled([
-      fetchWater(), fetchHAB(), fetchWeather(), fetchAlerts(), fetchSensors(),
-      fetchSatelliteStatus(), fetchOceanStatus(), fetchEcologyStatus(),
-      fetchLandStatus(), fetchAirPlusStatus(), fetchGOESStatus(), fetchGoesLatest(),
+      s.fetchWater(), s.fetchHAB(), s.fetchWeather(), s.fetchAlerts(), s.fetchSensors(),
+      s.fetchSatelliteStatus(), s.fetchOceanStatus(), s.fetchEcologyStatus(),
+      s.fetchLandStatus(), s.fetchAirPlusStatus(), s.fetchGOESStatus(), s.fetchGoesLatest(),
+      s.fetchFlood?.(), s.fetchBeach?.(), s.fetchClimate?.(), s.fetchPollution?.(),
+      s.fetchInference?.(), s.fetchSourceHealth?.(),
     ])
     set({ lastUpdated: Date.now() })
   },
@@ -225,5 +232,85 @@ export const useStore = create((set, get) => ({
       const data = await res.json()
       set(s => ({ goesLatest: data?.readings || null, lastFetchedAt: { ...s.lastFetchedAt, goesLatest: Date.now() } }))
     } catch (e) { console.error('[Store] GOES latest error:', e) }
+  },
+
+  fetchFlood: async () => {
+    set(s => ({ loading: { ...s.loading, flood: true } }))
+    try {
+      const res = await fetch(`${API}/api/flood/status`)
+      const data = await res.json()
+      set(s => ({ flood: data, loading: { ...s.loading, flood: false }, lastFetchedAt: { ...s.lastFetchedAt, flood: Date.now() } }))
+    } catch (e) {
+      console.error('[Store] flood fetch error:', e)
+      set(s => ({ loading: { ...s.loading, flood: false } }))
+    }
+  },
+
+  fetchBeach: async () => {
+    set(s => ({ loading: { ...s.loading, beach: true } }))
+    try {
+      const res = await fetch(`${API}/api/beach/status`)
+      const data = await res.json()
+      set(s => ({ beach: data, loading: { ...s.loading, beach: false }, lastFetchedAt: { ...s.lastFetchedAt, beach: Date.now() } }))
+    } catch (e) {
+      console.error('[Store] beach fetch error:', e)
+      set(s => ({ loading: { ...s.loading, beach: false } }))
+    }
+  },
+
+  fetchClimate: async () => {
+    set(s => ({ loading: { ...s.loading, climate: true } }))
+    try {
+      const res = await fetch(`${API}/api/climate/status`)
+      const data = await res.json()
+      set(s => ({ climate: data, loading: { ...s.loading, climate: false }, lastFetchedAt: { ...s.lastFetchedAt, climate: Date.now() } }))
+    } catch (e) {
+      console.error('[Store] climate fetch error:', e)
+      set(s => ({ loading: { ...s.loading, climate: false } }))
+    }
+  },
+
+  fetchPollution: async () => {
+    set(s => ({ loading: { ...s.loading, pollution: true } }))
+    try {
+      const res = await fetch(`${API}/api/pollution/status`)
+      const data = await res.json()
+      set(s => ({ pollution: data, loading: { ...s.loading, pollution: false }, lastFetchedAt: { ...s.lastFetchedAt, pollution: Date.now() } }))
+    } catch (e) {
+      console.error('[Store] pollution fetch error:', e)
+      set(s => ({ loading: { ...s.loading, pollution: false } }))
+    }
+  },
+
+  fetchInference: async () => {
+    try {
+      const res = await fetch(`${API}/api/inference/latest`)
+      const data = await res.json()
+      set(s => ({ inference: data, lastFetchedAt: { ...s.lastFetchedAt, inference: Date.now() } }))
+    } catch (e) { console.error('[Store] inference fetch error:', e) }
+  },
+
+  fetchSourceHealth: async () => {
+    try {
+      const res = await fetch(`${API}/api/intelligence/source-health`)
+      const data = await res.json()
+      set({ sourceHealth: data })
+    } catch (e) { console.error('[Store] source health error:', e) }
+  },
+
+  fetchADPH: async () => {
+    try {
+      const res = await fetch(`${API}/api/adph/closures`)
+      const data = await res.json()
+      set({ adphClosures: data })
+    } catch (e) { console.error('[Store] ADPH fetch error:', e) }
+  },
+
+  fetchWeatherForecast: async () => {
+    try {
+      const res = await fetch(`${API}/api/sensors/land/status`)
+      const data = await res.json()
+      set({ weatherForecast: data?.openMeteo?.dailyForecast || null })
+    } catch (e) { console.error('[Store] weather forecast error:', e) }
   },
 }))

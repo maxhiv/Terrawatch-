@@ -2,12 +2,60 @@ import {
   getLabeledVectors, getAllVectors, getDeployedModel,
   writeModel, writeRetrainLog, getDBStats
 } from './database.js'
+import { trainRandomForest, predictForest, evaluateForest } from '../ml/randomForest.js'
+import { computePermutationSHAP } from '../ml/shap.js'
 
 const PHASE_THRESHOLDS = {
   logistic:  100,
   forest:    500,
   cnnLstm:  2000,
 }
+
+const FEATURE_KEYS = [
+  'min_do2','avg_do2','max_do2','std_do2',
+  'avg_temp','max_temp','total_flow_kcfs','avg_turb','max_turb',
+  'station_count','hypoxic_stations','low_do2_stations',
+  'do2_dogriver','do2_fowlriver','do2_mobilei65','flow_mobilei65',
+  'turb_dogriver','gage_height_dogriver','gage_height_mobilei65',
+  'ortho_p_dogriver','total_n_mobilei65',
+  'wbDo2','wbDOPct','wbTemp','wbSal','wbTurb','wbChlFl','wbCond','wbPH','wbDepth',
+  'wbWSpd','wbMaxWSpd','wbWdir','wbATemp','wbBP','wbPAR','wbPrec','wbRH',
+  'currentSpeed_ms','currentDir_deg','bloom14h_km',
+  'lag_dogriver_weeksbay_h','upstream_do2_dogriver','upstream_flow_dogriver','upstream_turb_dogriver',
+  'waterLevel_dauphinIs','salinity_dauphinIs','waterTemp_dauphinIs',
+  'coops_wind_speed','coops_air_pressure_mb','coops_air_temp_c',
+  'aqi',
+  'goes_sst_mean','goes_sst_gradient','goes_qpe_rainfall','goes_qpe_6h','goes_qpe_24h',
+  'goes_cloud_pct','goes_glm_flashes','goes_glm_active','goes_amv_speed','goes_amv_dir',
+  'goes_bloom_index','goes_turbidity_idx',
+  'goes_stratification_alert','goes_nutrient_pulse_alert','goes_bloom_alert',
+  'buoy_water_temp_c','buoy_wind_speed_ms','buoy_wind_dir_deg','buoy_wind_gust_ms',
+  'buoy_air_temp_c','buoy_pressure_mb','buoy_wave_height_m',
+  'buoy_dom_wave_period_s','buoy_avg_wave_period_s','buoy_mean_wave_dir',
+  'buoy_dewpoint_c','buoy_available',
+  'nws_wind_speed_mph','nws_wind_gust_mph',
+  'nws_wind_dir_deg','nws_temp_c','nws_humidity_pct',
+  'nws_dewpoint_c','nws_pressure_mb','nws_visibility_m','nws_available',
+  'modis_granules','viirs_granules','hls_granules','landsat_granules',
+  'sentinel2_granules','sentinel2_cloud_pct','pace_active','goes_erddap_active',
+  'cmems_available','hycom_available','coastwatch_chl_rows',
+  'inaturalist_obs_7d','gbif_occurrences_90d','ebird_obs_7d','ameriflux_active',
+  'precip_current_mm','wind_ms_openmeteo','cape_jkg','solar_rad_wm2','uv_index',
+  'lifted_index','soil_moisture','cin','blh',
+  'precip_7day_sum_mm','max_precip_prob_7d','uv_max_7d','solar_sum_today',
+  'ahps_flood_stage_ft','ahps_flood_active','ncei_data_available',
+  'fema_flood_zone','nlcd_impervious_pct',
+  'openaq_pm25','purpleair_pm25','epa_aqs_pm25','air_quality_alert',
+  'hab_prob',
+  'tidal_phase','do2_saturation_pct','halocline_strength','sst_delta_24h',
+  'bloom_transport_risk','do2_trend_3h','temp_trend_3h','sal_trend_3h',
+  'compound_stress_index',
+  'month','is_summer','is_night',
+  'hour_sin','hour_cos','doy_sin','doy_cos',
+]
+
+const FEATURE_DEFAULTS = {}
+for (const k of FEATURE_KEYS) FEATURE_DEFAULTS[k] = 0
 
 const sigmoid = x => 1 / (1 + Math.exp(-Math.max(-500, Math.min(500, x))))
 const dot = (a, b) => a.reduce((s, ai, i) => s + ai * (b[i] || 0), 0)
@@ -16,32 +64,7 @@ const std = arr => { const m = mean(arr); return Math.sqrt(mean(arr.map(v=>(v-m)
 
 function extractFeatureArray(featuresJson) {
   const f = typeof featuresJson === 'string' ? JSON.parse(featuresJson) : featuresJson
-
-  return [
-    f.min_do2           ?? 7,
-    f.avg_do2           ?? 7,
-    f.wbDo2             ?? 7,
-    f.avg_temp          ?? 25,
-    f.max_temp          ?? 25,
-    f.wbTemp            ?? 25,
-    f.wbSal             ?? 15,
-    f.wbChlFl           ?? 2,
-    f.total_flow_kcfs   ?? 10,
-    f.avg_turb          ?? 5,
-    f.currentSpeed_ms   ?? 0.15,
-    f.bloom14h_km       ?? 5,
-    f.upstream_do2_dogriver ?? 7,
-    f.lag_dogriver_weeksbay_h ?? 18,
-    f.aqi               ?? 50,
-    f.hour_sin          ?? 0,
-    f.hour_cos          ?? 1,
-    f.doy_sin           ?? 0,
-    f.doy_cos           ?? 1,
-    f.is_summer         ?? 0,
-    f.is_night          ?? 0,
-    f.hypoxic_stations  ?? 0,
-    f.low_do2_stations  ?? 0,
-  ]
+  return FEATURE_KEYS.map(k => f[k] ?? FEATURE_DEFAULTS[k] ?? 0)
 }
 
 function normalizeFeatures(X) {
@@ -127,16 +150,24 @@ export async function retrainHABOracle() {
   const current = await getDeployedModel('hab_oracle')
   const prevAccuracy = current?.accuracy || 0
 
-  console.log(`[MLTrainer] Phase ${phase} training — ${labeled.length} samples`)
+  console.log(`[MLTrainer] Phase ${phase} training — ${labeled.length} samples, ${FEATURE_KEYS.length} features`)
   const startMs = Date.now()
-  const model = trainLogisticRegression(X, y, {
-    lr: 0.005,
-    epochs: phase === 2 ? 1500 : 800,
-    lambda: 0.001
-  })
-  const elapsed = Date.now() - startMs
-  const { accuracy, aucRoc } = evaluateModel(model, X, y)
 
+  let model, accuracy, aucRoc
+
+  if (phase === 2) {
+    model = trainRandomForest(X, y, { nTrees: 100, maxDepth: 10, minSamples: 5 })
+    const eval2 = evaluateForest(model, X, y)
+    accuracy = eval2.accuracy
+    aucRoc = eval2.aucRoc
+  } else {
+    model = trainLogisticRegression(X, y, { lr: 0.005, epochs: 800, lambda: 0.001 })
+    const eval1 = evaluateModel(model, X, y)
+    accuracy = eval1.accuracy
+    aucRoc = eval1.aucRoc
+  }
+
+  const elapsed = Date.now() - startMs
   const version = `v${phase}.${Math.floor(labeled.length / 100)}.${new Date().toISOString().slice(0,10)}`
 
   const improved = aucRoc > (current?.auc_roc || 0) + 0.005
@@ -156,6 +187,7 @@ export async function retrainHABOracle() {
     aucRoc,
     prevAucRoc:   current?.auc_roc || null,
     nSamples:     labeled.length,
+    nFeatures:    FEATURE_KEYS.length,
     trainMs:      elapsed,
     improved,
     note: improved ? `Model promoted to production (${version})` : `Model held — no improvement over current`,
@@ -254,19 +286,65 @@ export async function runInference(features) {
 
   const x = extractFeatureArray(features)
   const w = model.weights
-  const xNorm = x.map((v, j) => (v - (w.means?.[j] || 0)) / (w.stds?.[j] || 1))
-  const prob = sigmoid(dot(xNorm, w.w) + w.b)
+
+  let prob
+  if (w.type === 'random_forest') {
+    const result = predictForest(w, x)
+    prob = result.probability
+  } else {
+    const xNorm = x.map((v, j) => (v - (w.means?.[j] || 0)) / (w.stds?.[j] || 1))
+    prob = sigmoid(dot(xNorm, w.w) + w.b)
+  }
+
   const label = prob > 0.5 ? 1 : 0
+  const riskLevel = prob > 0.8 ? 'CRITICAL' : prob > 0.65 ? 'HIGH' : prob > 0.45 ? 'MODERATE' : 'LOW'
+
+  let shapResult = null
+  try {
+    const predictFn = (xArr) => {
+      if (w.type === 'random_forest') {
+        return predictForest(w, xArr).probability
+      }
+      const xN = xArr.map((v, j) => (v - (w.means?.[j] || 0)) / (w.stds?.[j] || 1))
+      return sigmoid(dot(xN, w.w) + w.b)
+    }
+    const rawShap = computePermutationSHAP(w, x, FEATURE_KEYS, { nSamples: 30, predictFn })
+    if (rawShap?.contributions && Array.isArray(rawShap.contributions)) {
+      shapResult = {}
+      for (const c of rawShap.contributions) {
+        if (c.feature && typeof c.contribution === 'number') {
+          shapResult[c.feature] = c.contribution
+        }
+      }
+    }
+  } catch (err) {
+    console.error('[MLTrainer] SHAP computation error:', err.message)
+  }
 
   return {
-    prediction: label,
+    prediction: prob,
+    probability: prob,
+    label,
     confidence: Math.round(prob * 1000) / 10,
-    riskLevel: prob > 0.8 ? 'CRITICAL' : prob > 0.65 ? 'HIGH' : prob > 0.45 ? 'MODERATE' : 'LOW',
+    riskLevel,
     modelVersion: model.version,
     modelPhase: model.phase,
     aucRoc: model.auc_roc,
     trainedOn: new Date(model.ts).toISOString(),
+    nFeatures: FEATURE_KEYS.length,
+    shap: shapResult,
   }
 }
 
-export { PHASE_THRESHOLDS }
+export function exportVectorsCSV(vectors) {
+  if (!vectors || vectors.length === 0) return ''
+  const header = ['ts', ...FEATURE_KEYS, 'label_hab', 'label_hypoxia'].join(',')
+  const rows = vectors.map(v => {
+    const f = typeof v.features === 'string' ? JSON.parse(v.features) : v.features
+    const vals = FEATURE_KEYS.map(k => f[k] ?? '')
+    return [v.ts, ...vals, v.label_hab ?? '', v.label_hypoxia ?? ''].join(',')
+  })
+  return [header, ...rows].join('\n')
+}
+
+export { PHASE_THRESHOLDS, FEATURE_KEYS }

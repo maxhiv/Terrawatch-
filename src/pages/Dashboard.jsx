@@ -1,4 +1,5 @@
 import { useEffect } from 'react'
+import { Link } from 'react-router-dom'
 import { useStore } from '../store/index.js'
 import { StatCard, PageHeader, RiskBadge, Spinner, Section, EmptyState, AlertBanner, SkeletonCard } from '../components/Common/index.jsx'
 import { HABProbabilityChart, WeatherForecastChart } from '../components/Charts/index.jsx'
@@ -16,8 +17,11 @@ export default function Dashboard() {
   const {
     waterQuality, habAssessment, weather, alerts, loading,
     nerrs, hfradar, aqi, goesStatus, goesLatest, ecologyStatus, sensors, landStatus, airplusStatus,
+    flood, beach, climate, pollution, inference,
     fetchAll, fetchNERRS, fetchHFRadar, fetchAQI, fetchGOESStatus, fetchGoesLatest,
-    fetchEcologyStatus, fetchLandStatus, fetchAirPlusStatus, lastUpdated, lastFetchedAt
+    fetchEcologyStatus, fetchLandStatus, fetchAirPlusStatus,
+    fetchFlood, fetchBeach, fetchClimate, fetchPollution, fetchInference,
+    lastUpdated, lastFetchedAt
   } = useStore()
 
   const isLoading = Object.values(loading).some(Boolean)
@@ -31,6 +35,11 @@ export default function Dashboard() {
     fetchEcologyStatus()
     fetchLandStatus()
     fetchAirPlusStatus()
+    fetchFlood()
+    fetchBeach()
+    fetchClimate()
+    fetchPollution()
+    fetchInference()
   }, [])
 
   const habProb = habAssessment?.hab?.probability
@@ -167,8 +176,88 @@ export default function Dashboard() {
           <StatCard label="PM2.5" value={pm25 != null ? pm25.toFixed(1) : '—'} unit="µg/m³" color={pm25 > 35 ? '#dc2626' : pm25 > 12 ? '#f59e0b' : '#10b981'} icon="🌫️" sub={pm25Source} alert={pm25 > 35} freshness={lastFetchedAt.sensors} />
           <StatCard label="Biodiversity" value={inatCount ?? '—'} unit="obs" color="#16a34a" icon="🦎" sub="iNaturalist 7-day" freshness={lastFetchedAt.sensors} />
           <StatCard label="Active Feeds" value={totalSensors || '—'} color="#0a9e80" icon="⊞" sub={`${sensors?.summary?.totalActiveFeeds || '—'} total feeds`} freshness={lastFetchedAt.sensors} />
-          <StatCard label="Feature Vector" value="141" unit="keys" color="#7c3aed" icon="⊡" sub="ML input features" freshness={lastFetchedAt.sensors} />
+          <StatCard label="Feature Vector" value="142" unit="keys" color="#7c3aed" icon="⊡" sub="ML input features" freshness={lastFetchedAt.sensors} />
         </div>
+      </Section>
+
+      <Section title="Product Intelligence">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <Link to="/compound-flood" className="no-underline">
+            <StatCard label="Compound Flood" value={flood?.compoundFloodRisk ?? '—'} unit="%" color={flood?.compoundFloodRisk >= 70 ? '#dc2626' : flood?.compoundFloodRisk >= 40 ? '#d97706' : '#0a9e80'} icon="🌊" sub={<RiskBadge level={flood?.riskLevel ?? 'LOW'} />} riskLevel={flood?.riskLevel} freshness={lastFetchedAt.flood} />
+          </Link>
+          <Link to="/beach-safety" className="no-underline">
+            <StatCard label="Beach Safety" value={beach?.swimSafety?.score ?? '—'} unit="/100" color={beach?.swimSafety?.score >= 75 ? '#0a9e80' : beach?.swimSafety?.score >= 50 ? '#d97706' : '#dc2626'} icon="🏖️" sub={<RiskBadge level={beach?.swimSafety?.level ?? 'UNKNOWN'} />} riskLevel={beach?.swimSafety?.level} freshness={lastFetchedAt.beach} />
+          </Link>
+          <Link to="/climate" className="no-underline">
+            <StatCard label="Climate Vulnerability" value={climate?.vulnerabilityIndex ?? '—'} unit="%" color={climate?.vulnerabilityIndex >= 65 ? '#dc2626' : climate?.vulnerabilityIndex >= 35 ? '#d97706' : '#0a9e80'} icon="🌍" sub={<RiskBadge level={climate?.riskLevel ?? 'LOW'} />} riskLevel={climate?.riskLevel} freshness={lastFetchedAt.climate} />
+          </Link>
+          <Link to="/pollution" className="no-underline">
+            <StatCard label="Pollution Index" value={pollution?.pollutionIndex ?? '—'} unit="%" color={pollution?.pollutionIndex >= 60 ? '#dc2626' : pollution?.pollutionIndex >= 30 ? '#d97706' : '#0a9e80'} icon="🏭" sub={<RiskBadge level={pollution?.riskLevel ?? 'LOW'} />} riskLevel={pollution?.riskLevel} freshness={lastFetchedAt.pollution} />
+          </Link>
+        </div>
+        {flood?.ahps?.stage != null && (
+          <div className="tw-card mt-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="tw-label text-blue-600 mb-1">AHPS Flood Stage — Mobile River</div>
+                <div className="tw-mono text-2xl font-bold text-blue-700">{flood.ahps.stage.toFixed(2)} ft</div>
+              </div>
+              {flood?.precipitation?.sum_7d_mm != null && (
+                <div className="text-right">
+                  <div className="tw-label mb-1">7-Day Precip Forecast</div>
+                  <div className="tw-mono text-lg font-bold text-purple-600">{flood.precipitation.sum_7d_mm.toFixed(0)} mm</div>
+                </div>
+              )}
+            </div>
+            {flood?.forecast?.length > 0 && (
+              <div className="grid grid-cols-7 gap-1 mt-3">
+                {flood.forecast.map((d, i) => {
+                  const dayName = d.date ? new Date(d.date + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'short' }) : `D${i+1}`
+                  return (
+                    <div key={i} className="text-center p-1 rounded bg-bay-50">
+                      <div className="text-[9px] text-bay-400">{dayName}</div>
+                      <div className="tw-mono text-xs font-bold text-blue-600">{d.precip_mm != null ? d.precip_mm.toFixed(0) : '—'}</div>
+                      <div className="text-[8px] text-bay-300">mm</div>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </div>
+        )}
+        {inference?.prediction != null && (
+          <div className="tw-card mt-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="tw-label text-purple-600 mb-1">ML Inference — {inference.modelPhase || 'Phase 2'}</div>
+                <div className="flex items-center gap-3">
+                  <div className="tw-mono text-2xl font-bold" style={{ color: inference.prediction > 0.5 ? '#dc2626' : '#0a9e80' }}>
+                    {(inference.prediction * 100).toFixed(0)}%
+                  </div>
+                  <RiskBadge level={inference.riskLevel || 'LOW'} />
+                  <span className="tw-mono text-xs text-bay-400">Confidence: {inference.confidence || '—'}</span>
+                </div>
+              </div>
+              {inference.shap && (
+                <div className="text-right">
+                  <div className="tw-label mb-1">Top SHAP Features</div>
+                  <div className="space-y-0.5">
+                    {Object.entries(inference.shap)
+                      .filter(([,v]) => typeof v === 'number' && !isNaN(v))
+                      .sort(([,a],[,b]) => Math.abs(b) - Math.abs(a))
+                      .slice(0, 3)
+                      .map(([k, v]) => (
+                        <div key={k} className="tw-mono text-[9px]">
+                          <span className="text-bay-500">{k}:</span>{' '}
+                          <span className={v > 0 ? 'text-red-600' : 'text-blue-600'}>{v > 0 ? '+' : ''}{v.toFixed(3)}</span>
+                        </div>
+                      ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
       </Section>
 
       {(nerrs?.waterQuality?.available || hfradar?.available || aqi?.available) && (

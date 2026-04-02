@@ -1,4 +1,4 @@
-# TERRAWATCH v2.1
+# TERRAWATCH v2.2
 
 Planetary Environmental Intelligence Platform — Mobile Bay & Gulf Coast
 
@@ -10,24 +10,27 @@ Planetary Environmental Intelligence Platform — Mobile Bay & Gulf Coast
 - **Runtime**: Node.js 20
 - **State management**: Zustand
 - **Database**: SQLite via sql.js (pure JS, `data/terrawatch.db`)
-- **ML Pipeline**: Logistic regression (Phase 1) → Random Forest (Phase 2) → CNN-LSTM on Vertex AI (Phase 3)
+- **ML Pipeline**: Logistic regression (Phase 1) → Random Forest + SHAP (Phase 2) → CNN-LSTM on Vertex AI (Phase 3)
 - **Styling**: Tailwind CSS (glassmorphism theme — frosted glass cards, gradient bg, risk tints)
 - **Icons**: Lucide React (sidebar navigation)
 - **Charts**: Recharts (includes inline sparklines in StatCards)
 - **Maps**: Leaflet
 
-## Server v2.1 Tiered Cron Architecture
+## Server v2.2 Tiered Cron Architecture
 
 - **Fast cron (3min)**: USGS, CO-OPS, NERRS, HF Radar, AirNow, GOES-19 DB lookup, NDBC Buoy 42012, NWS Weather
 - **Slow cron (15min)**: Satellite (NASA CMR), Ocean models (HYCOM/CMEMS), Ecology (iNaturalist/GBIF/eBird), Land/Weather (Open-Meteo/AHPS), Air Quality (EPA AQS/OpenAQ/PurpleAir)
-- **ML feature vector**: 141 features from 15+ live data sources per tick
-- **HAB Oracle v2**: 10-factor weighted ensemble (6 legacy + 4 GOES-19 factors: stratification, rainfall nutrient pulse, satellite bloom signal, GLM lightning mixing)
+- **Nightly cron (8AM)**: ML retrain (Random Forest + SHAP explainability)
+- **ML feature vector**: 142 features from 15+ live data sources per tick
+- **HAB Oracle v2.2**: 11-factor weighted ensemble (6 legacy + 4 GOES-19 factors + PAR bloom growth risk)
+- **Hypoxia Forecast**: Halocline-based stratification model with Jubilee detection conditions
+- **Alert Engine**: evaluateAndDispatchAlerts() — hypoxia, stratification, bloom, compound stress, flood, air quality
 
 ## GOES-19 Dual-Track Architecture
 
 - **Push pipeline**: `routes/goes19.js` → SQLite DB → `getLatestGOESReadings()` → `_latestData.goesLatest` → ML model + frontend
 - **ERDDAP pull**: `services/goes.js` → CoastWatch ERDDAP (currently 404, fallback to push)
-- **Frontend merge**: `/api/sensors/goes/all` returns `status` (ERDDAP), `imagery` (CDN), and `push` (DB) fields; Dashboard/ScienceView use push SST as fallback with source-aware subtitles
+- **Frontend merge**: `/api/sensors/goes/all` returns `status` (ERDDAP), `imagery` (CDN), and `push` (DB) fields
 - **Push fields**: sst_mean, sst_gradient, qpe_rainfall, qpe_6h, qpe_24h, cloud_coverage, glm_flashes, glm_active, amv_wind_speed, amv_wind_dir, bloom_index, turbidity_idx
 
 ## Project Structure
@@ -35,18 +38,23 @@ Planetary Environmental Intelligence Platform — Mobile Bay & Gulf Coast
 ```
 terrawatch/
 ├── src/                        # React frontend
-│   ├── pages/                  # 16 page components
+│   ├── pages/                  # 20 page components
 │   │   ├── Dashboard.jsx       # Main environmental dashboard (GOES alert strip, UV/gust/PM2.5 cards)
 │   │   ├── HabOracle.jsx       # HAB prediction (World First™)
-│   │   ├── HypoxiaForecast.jsx # Hypoxia risk forecasting
+│   │   ├── HypoxiaForecast.jsx # Hypoxia risk forecasting with Jubilee detection
 │   │   ├── WaterQuality.jsx    # Interactive water quality map
 │   │   ├── SensorsRegistry.jsx # Data feed registry
+│   │   ├── CompoundFlood.jsx   # Compound flood intelligence (AHPS + GOES QPE + USGS flow)
+│   │   ├── BeachSafety.jsx     # Beach safety (swim index, ADPH closures, UV, currents)
+│   │   ├── ClimateVulnerability.jsx # Climate vulnerability index (SST, DO₂, heat index)
+│   │   ├── PollutionTracker.jsx # Pollution tracker (AQI, PM2.5, turbidity, nutrients)
 │   │   ├── WetlandAI.jsx       # Wetland pre-delineation
 │   │   ├── SITEVAULT.jsx       # Site assessment vault
-│   │   ├── MapPage.jsx         # Satellite map view (4 live overlay layers: currents/wind/waves/solar)
-│   │   ├── DataStream.jsx      # 141-key feature vector explorer (9 tabs)
+│   │   ├── MapPage.jsx         # Satellite map view (4 live overlay layers)
+│   │   ├── DataStream.jsx      # 142-key feature vector explorer (9 tabs)
 │   │   ├── ScienceView.jsx     # Science data explorer
 │   │   ├── FeedStatus.jsx      # Live feed status dashboard
+│   │   ├── Intelligence.jsx    # ML intelligence dashboard
 │   │   ├── Alerts.jsx          # Alert center
 │   │   ├── AIAssistant.jsx     # AI field assistant
 │   │   ├── Vision.jsx          # Platform vision
@@ -54,36 +62,53 @@ terrawatch/
 │   ├── components/
 │   │   ├── Common/index.jsx    # StatCard (glass, risk tints, sparklines, freshness), PageHeader, RiskBadge, Spinner, SkeletonCard, SkeletonRow, Section, EmptyState, AlertBanner
 │   │   ├── Charts/index.jsx    # DOChart, HABProbabilityChart, WeatherForecastChart, AirQualityChart, SatelliteTimelineChart, OceanConditionsChart
-│   │   └── Layout/Layout.jsx   # Sidebar navigation (18 routes, "141 KEYS" DataStream badge)
-│   ├── store/index.js          # Zustand store (all API fetchers)
-│   ├── App.jsx                 # Router with nested Layout routes
+│   │   └── Layout/Layout.jsx   # Sidebar navigation (22 routes, "142 KEYS" DataStream badge, 4 NEW product badges)
+│   ├── store/index.js          # Zustand store (all API fetchers including flood/beach/climate/pollution/inference/sourceHealth/ADPH)
+│   ├── App.jsx                 # Router with nested Layout routes (20 pages)
 │   ├── main.jsx                # React entry point
-│   └── index.css               # Tailwind + custom classes (tw-badge, tw-btn-primary, live-dot, animate-in)
+│   └── index.css               # Tailwind + custom classes
 ├── server/                     # Express API
-│   ├── index.js                # Server entry (port 3001, trust proxy)
+│   ├── index.js                # Server entry (port 3001, trust proxy, alert engine, nightly retrain cron)
 │   ├── routes/
-│   │   ├── waterQuality.js     # /api/water/* (USGS, CO-OPS, NDBC)
-│   │   ├── habOracle.js        # /api/hab/* (HAB assessment)
-│   │   ├── weather.js          # /api/weather/* (NWS forecast)
-│   │   ├── alerts.js           # /api/alerts (weather alerts)
-│   │   ├── sensors.js          # /api/sensors/* (registry + hfradar, nerrs, pace, methane, epa, openeo, goes/all with push merge)
-│   │   ├── goes19.js           # /api/goes19/* (push pipeline ingest + push-latest endpoint)
-│   │   ├── ai.js               # /api/ai/* (Anthropic assistant)
-│   │   ├── intelligence.js     # /api/intelligence/* (DB stats, retrain, inference, vectors, events)
-│   │   └── mlArchitecture.js   # /api/ml/* (ML architecture status)
+│   │   ├── waterQuality.js     # /api/water/*
+│   │   ├── habOracle.js        # /api/hab/*
+│   │   ├── weather.js          # /api/weather/*
+│   │   ├── alerts.js           # /api/alerts
+│   │   ├── sensors.js          # /api/sensors/*
+│   │   ├── goes19.js           # /api/goes19/*
+│   │   ├── ai.js               # /api/ai/*
+│   │   ├── intelligence.js     # /api/intelligence/* (feature-keys, export-csv, explain/SHAP, source-health)
+│   │   ├── mlArchitecture.js   # /api/ml/*
+│   │   ├── flood.js            # /api/flood/status (compound flood risk)
+│   │   ├── beach.js            # /api/beach/status (swim safety + ADPH closures)
+│   │   ├── climate.js          # /api/climate/status (vulnerability index)
+│   │   └── pollution.js        # /api/pollution/status (pollution index)
 │   ├── services/
-│   │   ├── usgs.js             # USGS NWIS water data
+│   │   ├── usgs.js             # USGS NWIS water data (6 stations, gage_height, orthophosphate, total_nitrogen)
 │   │   ├── noaa.js             # NOAA CO-OPS, NWS, NDBC
-│   │   ├── hfradar.js          # NOAA ERDDAP surface currents
-│   │   ├── nerrs.js            # Weeks Bay CDMO dock sensors
+│   │   ├── hfradar.js          # NOAA ERDDAP surface currents (3-endpoint fallback: 6km → 1km → THREDDS)
+│   │   ├── nerrs.js            # Weeks Bay CDMO dock sensors (primary wekbwq + secondary wekbwq2)
 │   │   ├── pace.js             # NASA PACE OCI ocean color
 │   │   ├── tropomi.js          # Sentinel-5P CH4 methane
 │   │   ├── epa.js              # EPA ECHO/WQP/AirNow/TRI
 │   │   ├── openeo.js           # Copernicus Algorithm Plaza (8 algorithms)
-│   │   ├── database.js         # SQLite persistence (sql.js, 5 tables)
-│   │   ├── crossSensor.js      # Cross-sensor feature assembly + auto-labeling
-│   │   └── mlTrainer.js        # ML training pipeline (Phase 1-3)
-│   └── ml/habOracle.js         # HAB Oracle algorithm
+│   │   ├── adph.js             # Alabama Dept Public Health shellfish closures
+│   │   ├── database.js         # SQLite persistence (sql.js, writeSourceHealth, getSourceHealthSummary)
+│   │   ├── crossSensor.js      # Cross-sensor feature assembly (142 keys) + corrected autoLabel (K. brevis ecology: warm+salty+calm+highChl+summer)
+│   │   ├── mlTrainer.js        # ML training pipeline (Phase 1-3, Random Forest, SHAP, exportVectorsCSV)
+│   │   ├── satellite.js        # MODIS, VIIRS, HLS, Landsat, Sentinel-2, Copernicus DEM
+│   │   ├── ocean.js            # CMEMS, HYCOM, CoastWatch, StreamStats, Digital Coast
+│   │   ├── ecology.js          # iNaturalist, GBIF, eBird, AmeriFlux
+│   │   ├── landregweather.js   # Open-Meteo (fixed hour index), AHPS (XML stage parse), NCEI, SSURGO, NWI, FEMA, NLCD, ATTAINS, USACE
+│   │   ├── airplus.js          # EPA AQS, OpenAQ, PurpleAir
+│   │   └── goes.js             # GOES-19 ABI SST (CoastWatch ERDDAP) + imagery (NOAA STAR CDN)
+│   └── ml/
+│       ├── habOracle.js        # HAB Oracle algorithm (11 factors, PAR bloom growth, halocline hypoxia model, Jubilee detection)
+│       ├── randomForest.js     # Phase 2 Random Forest ensemble
+│       ├── shap.js             # Permutation SHAP explainability
+│       ├── stfGnn.js           # Spatio-temporal GNN (Phase 3 pre-wire)
+│       ├── stTransformer.js    # Spatio-temporal Transformer (Phase 3 pre-wire)
+│       └── piRnn.js            # Physics-informed RNN (Phase 3 pre-wire)
 ├── vite.config.js              # Vite (port 5000, proxy /api → :3001)
 ├── tailwind.config.js          # Bay palette (light greens)
 └── package.json                # Monorepo scripts
@@ -105,8 +130,8 @@ npm run build         # Vite production build
 - NOAA CO-OPS — tidal data and water levels
 - NOAA NWS — weather forecasts and alerts
 - NOAA NDBC — offshore buoy data (Buoy 42012)
-- NOAA HF Radar — ERDDAP surface currents
-- NERRS CDMO — Weeks Bay dock sensors
+- NOAA HF Radar — ERDDAP surface currents (3-endpoint fallback)
+- NERRS CDMO — Weeks Bay dock sensors (primary + secondary station wekbwq)
 - EPA ECHO — facility compliance data
 - EPA Water Quality Portal — federal water quality
 - EPA TRI — toxic release inventory
@@ -119,7 +144,7 @@ npm run build         # Vite production build
 - iNaturalist — citizen science biodiversity
 - GBIF — global biodiversity occurrences
 - Open-Meteo — 7-day weather forecast (no key)
-- NOAA AHPS — flood stage data
+- NOAA AHPS — flood stage data (XML stage extraction)
 - NRCS SSURGO — hydric soil survey
 - USGS NWI — National Wetlands Inventory
 - FEMA FIRM — flood zone maps
@@ -127,6 +152,7 @@ npm run build         # Vite production build
 - EPA ATTAINS — impaired waters 303(d)
 - USACE ORM — Section 404 permits
 - OpenAQ — global air quality aggregator
+- ADPH — Alabama shellfish closure monitoring
 
 ### Tier 2 — Free Keys (Optional, 10 sources)
 - `NASA_EARTHDATA_USER` / `NASA_EARTHDATA_PASS` — PACE OCI, MODIS, VIIRS, HLS, Landsat (6 sources)
@@ -142,48 +168,34 @@ npm run build         # Vite production build
 - `ANTHROPIC_API_KEY` — AI Field Assistant
 - `VEXCEL_API_KEY` — High-res aerial imagery
 
-### New Service Modules (server/services/)
-- `satellite.js` — MODIS, VIIRS, HLS, Landsat, Sentinel-2, Copernicus DEM
-- `ocean.js` — CMEMS, HYCOM, CoastWatch, StreamStats, Digital Coast
-- `ecology.js` — iNaturalist, GBIF, eBird, AmeriFlux
-- `landregweather.js` — Open-Meteo, AHPS, NCEI, SSURGO, NWI, FEMA, NLCD, ATTAINS, USACE
-- `airplus.js` — EPA AQS, OpenAQ, PurpleAir
-- `goes.js` — GOES-19 ABI SST (CoastWatch ERDDAP) + imagery (NOAA STAR CDN)
+## Product Intelligence Pages (v2.2)
 
-### New API Routes (server/routes/sensors.js)
-- `/api/sensors/satellite/status` — composite satellite status
-- `/api/sensors/ocean/status` — composite ocean/coastal status
-- `/api/sensors/ecology/status` — composite ecology status
-- `/api/sensors/ecology/inaturalist` — iNaturalist observations
-- `/api/sensors/ecology/gbif` — GBIF occurrences
-- `/api/sensors/ecology/ebird` — eBird observations
-- `/api/sensors/land/status` — composite land/regulatory/weather status
-- `/api/sensors/land/weather` — Open-Meteo weather
-- `/api/sensors/land/flood` — FEMA flood zone lookup
-- `/api/sensors/land/wetlands` — NWI wetlands query
-- `/api/sensors/land/attains` — EPA impaired waters
-- `/api/sensors/airplus/status` — composite air quality status
-- `/api/sensors/airplus/openaq` — OpenAQ readings
-- `/api/sensors/airplus/purpleair` — PurpleAir PM2.5
-- `/api/sensors/goes/status` — GOES-19 SST status
-- `/api/sensors/goes/image` — GOES-19 latest imagery (sector/band params)
-- `/api/sensors/goes/all` — composite GOES status + imagery
+### Compound Flood (`/compound-flood`)
+- AHPS flood stage + GOES QPE rainfall + USGS river flow + Open-Meteo 7-day precipitation
+- Compound risk scoring (0-100) based on multiple concurrent flood drivers
 
-### GOES-19 Live Push Ingest (server/routes/goes19.js)
-- `POST /api/goes19/ingest` — Receives Jeff's 5-min GOES-19 pipeline (SST, QPE, cloud mask, RGB, GLM lightning, AMV winds). Auth: `x-api-key` header vs `GOES19_API_KEY` env var. Persists to `sensor_readings` table as source `GOES19-PUSH`.
-- `GET /api/goes19/latest` — Returns most recent scan payload
-- `GET /api/goes19/health` — Endpoint health/config status
+### Beach Safety (`/beach-safety`)
+- Swim safety index (0-100) based on waves, wind, currents, UV, AQI
+- ADPH shellfish closure monitoring
+- NDBC buoy conditions + HF Radar currents
 
-## Key Features
+### Climate Vulnerability (`/climate`)
+- Vulnerability index based on SST, DO₂, heat index, sea level
+- GOES-19 SST gradient analysis
+- Trend accumulation for long-term analysis
 
-- **Dashboard**: Real-time environmental conditions from 51+ data sources
-- **HAB Oracle**: Pre-bloom harmful algal bloom prediction (48-72h, World First™)
-- **Water Quality**: Interactive Leaflet map with NASA GIBS satellite overlays
-- **Feed Status**: Live status of all data feeds with health indicators
-- **Science View**: Multi-source data explorer with dynamic station cards (only shows parameters with data — no empty dashes). NERRS (CDMO OFFLINE badge), USGS (flow + stage + DO₂ + temp), CO-OPS tidal, GOES-19 imagery (live GEOCOLOR), PurpleAir 13 sensors, ecology (eBird + iNaturalist + GBIF), satellites, ocean models (HYCOM + CMEMS), atmospheric (Open-Meteo wind/CAPE/precip + AQI), land/regulatory (FEMA + ATTAINS + NWI + SSURGO + NLCD + USACE). Station compare, correlation scatter (Temp vs DO₂), and comprehensive CSV export.
-- **Master Roadmap**: 16 tabs — Vision, Roadmap, Build Progress (51+ feeds, 25+ endpoints, 12 services, env vars, external API health), Intelligence Engine, Scientist Meeting, Hatch Strategy, BCEDA/SITEVAULT, Revenue Model, Opportunities, State Expansion, Private Sector, Osprey Integration, Data Sources, Airbus, Fox 10, Next Sensors.
-- **Sensor Registry**: Complete registry of all 51+ data feed integrations
-- **WetlandAI**: Wetland pre-delineation module
-- **SITEVAULT**: Site assessment data vault
-- **Alert Center**: Environmental alerts and notifications
-- **AI Field Assistant**: Anthropic-powered environmental Q&A
+### Pollution Tracker (`/pollution`)
+- Multi-source PM2.5 (OpenAQ + PurpleAir + EPA AQS)
+- Water turbidity + nutrient loading (orthophosphate, total nitrogen)
+- NPDES compliance monitoring
+
+## ML Pipeline v2.2
+
+- **142-key feature vector**: Assembled from 15+ live data sources every 3 minutes
+- **Auto-labeling**: Corrected K. brevis ecology signals (warm+salty+calm+highChl+summer ≥ 3 = HAB positive)
+- **Phase 1**: Logistic regression (always active)
+- **Phase 2**: Random Forest ensemble + Permutation SHAP explainability (≥100 labeled samples)
+- **Phase 3**: CNN-LSTM on Vertex AI (≥2000 labeled samples, requires GCP credentials)
+- **SHAP endpoint**: POST /api/intelligence/explain — returns feature importance values
+- **CSV export**: GET /api/intelligence/export-csv — download training vectors
+- **Source health**: GET /api/intelligence/source-health — data source uptime monitoring

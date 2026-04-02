@@ -144,8 +144,6 @@ function satelliteBloomSignal(bloomIndex) {
 }
 
 function glmLightningMixingRisk(glmFlashes5min) {
-  // Active storm = vertical mixing = DO₂ spike, then post-storm hypoxia rebound.
-  // No lightning = calm water = bloom-favorable — deliberately scores HIGH at zero.
   if (glmFlashes5min == null) return 0.15
   if (glmFlashes5min >= 20) return 0.80
   if (glmFlashes5min >= 5)  return 0.60
@@ -153,15 +151,29 @@ function glmLightningMixingRisk(glmFlashes5min) {
   return 0.15
 }
 
+function parBloomGrowthRisk(parMmolM2, uvIndex) {
+  const par = parMmolM2 ?? null
+  const uv  = uvIndex ?? null
+  if (par == null && uv == null) return 0.3
+  let risk = 0.2
+  if (par != null) {
+    if (par > 40) risk = 0.85
+    else if (par > 25) risk = 0.65
+    else if (par > 10) risk = 0.40
+    else risk = 0.15
+  }
+  if (uv != null && uv > 8) risk = Math.min(1, risk + 0.10)
+  return risk
+}
+
 export function runHabOracle(inputs) {
   const {
     water_temp_c, salinity_ppt, wind_speed_mph, wind_direction_deg,
     do_mg_l, streamflow_cfs, turbidity_ntu, nitrate_mg_l,
     surface_temp_c, bottom_temp_c, bottom_salinity_ppt, chlorophyll_ug_l,
-    // GOES-19 push fields
     goes_sst_gradient, goes_qpe_6h, goes_qpe_24h, goes_bloom_index, goes_glm_flashes,
-    // HF Radar
     hf_speed_ms, hf_bloom_14h_km,
+    par_mmol_m2, uv_index,
   } = inputs
 
   const month = new Date().getMonth() + 1
@@ -174,26 +186,25 @@ export function runHabOracle(inputs) {
     dissolved_oxygen:        doRisk(do_mg_l),
     nutrient_loading:        nutrientLoadingRisk(streamflow_cfs, turbidity_ntu, nitrate_mg_l),
     stratification:          stratificationIndex(surface_temp_c || water_temp_c, bottom_temp_c, salinity_ppt, bottom_salinity_ppt),
-    // GOES-19 derived factors — fill in as push data arrives, gracefully degrade to 0.3 when null
     goes_stratification:     goesStratificationRisk(goes_sst_gradient),
     rainfall_nutrient_pulse: rainfallNutrientPulseRisk(goes_qpe_6h, goes_qpe_24h),
     satellite_bloom:         satelliteBloomSignal(goes_bloom_index),
     glm_lightning_mixing:    glmLightningMixingRisk(goes_glm_flashes),
+    par_bloom_growth:        parBloomGrowthRisk(par_mmol_m2, uv_index),
   }
 
-  // Weights sum to 1.00. GOES factors weighted above legacy stratification because
-  // geostationary 5-min SST gradient is a more direct signal than the proxy estimate.
   const WEIGHTS = {
-    temperature:             0.12,
-    salinity:                0.09,
-    wind:                    0.12,
-    dissolved_oxygen:        0.10,
-    nutrient_loading:        0.09,
-    stratification:          0.09,
-    goes_stratification:     0.13,
-    rainfall_nutrient_pulse: 0.10,
+    temperature:             0.11,
+    salinity:                0.08,
+    wind:                    0.11,
+    dissolved_oxygen:        0.09,
+    nutrient_loading:        0.08,
+    stratification:          0.08,
+    goes_stratification:     0.12,
+    rainfall_nutrient_pulse: 0.09,
     satellite_bloom:         0.09,
     glm_lightning_mixing:    0.07,
+    par_bloom_growth:        0.08,
   }
 
   let weightedRisk = 0
@@ -264,13 +275,16 @@ export function runHabOracle(inputs) {
       goesConnected: goes_sst_gradient != null || goes_bloom_index != null,
       hfRadarConnected: hf_speed_ms != null,
     },
-    version: '2.1.0',
-    methodology: 'Multi-feed weighted ensemble + Bayesian seasonal prior. Based on Gulf Coast K. brevis ecology (Stumpf et al., NOAA).',
+    version: '2.2.0',
+    methodology: '11-factor weighted ensemble + Bayesian seasonal prior. Based on Gulf Coast K. brevis ecology (Stumpf et al., NOAA). Includes PAR bloom growth factor.',
   }
 }
 
 export function runHypoxiaForecast(inputs) {
-  const { water_temp_c, salinity_ppt, wind_speed_mph, streamflow_cfs, do_mg_l } = inputs
+  const {
+    water_temp_c, salinity_ppt, wind_speed_mph, streamflow_cfs, do_mg_l,
+    halocline_strength, bottom_salinity_ppt, goes_sst_gradient,
+  } = inputs
   const month = new Date().getMonth() + 1
 
   const SEASONAL_HYPOXIA = { 1:0.05,2:0.05,3:0.08,4:0.15,5:0.30,6:0.50,7:0.75,8:0.80,9:0.55,10:0.25,11:0.10,12:0.05 }
@@ -291,13 +305,38 @@ export function runHypoxiaForecast(inputs) {
   if (do_mg_l < 4) hypoxiaRisk += 0.30
   else if (do_mg_l < 6) hypoxiaRisk += 0.15
 
+  const halo = halocline_strength ?? (bottom_salinity_ppt != null && salinity_ppt != null ? bottom_salinity_ppt - salinity_ppt : null)
+  if (halo != null) {
+    if (halo > 5) hypoxiaRisk += 0.20
+    else if (halo > 3) hypoxiaRisk += 0.12
+    else if (halo > 1) hypoxiaRisk += 0.05
+  }
+
+  if (goes_sst_gradient != null && goes_sst_gradient >= 3.5) {
+    hypoxiaRisk += 0.15
+  }
+
   const finalRisk = Math.min(100, Math.round(hypoxiaRisk * 100))
+
+  const isJubileeCondition = finalRisk > 65 && month >= 5 && month <= 9
+    && wind_speed_mph != null && wind_speed_mph < 5
+    && (halo == null || halo > 2)
+    && do_mg_l != null && do_mg_l < 4
 
   return {
     probability: finalRisk,
     riskLevel: finalRisk < 25 ? 'LOW' : finalRisk < 50 ? 'MODERATE' : finalRisk < 70 ? 'ELEVATED' : 'HIGH',
     expectedMinDO: finalRisk > 60 ? 2.5 : finalRisk > 40 ? 4.0 : 6.0,
-    jubileeRisk: finalRisk > 70 && month >= 6 && month <= 9,
+    jubileeRisk: isJubileeCondition,
+    jubileeDetails: isJubileeCondition ? {
+      description: 'Mobile Bay Jubilee conditions detected — hypoxic bottom water pushing marine life to eastern shore',
+      triggers: ['Low DO₂', 'Calm wind', 'Strong halocline', 'Summer season'],
+      historicalNote: 'Jubilees occur primarily along the eastern shore of Mobile Bay, concentrated near Daphne and Fairhope.',
+    } : null,
+    haloclineModel: halo != null ? {
+      strength: Math.round(halo * 10) / 10,
+      interpretation: halo > 5 ? 'Strong stratification — limited vertical mixing' : halo > 3 ? 'Moderate stratification' : 'Weak — good mixing',
+    } : null,
     forecast_days: 5,
     timestamp: new Date().toISOString(),
   }

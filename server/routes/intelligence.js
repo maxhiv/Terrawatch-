@@ -3,8 +3,9 @@ import {
   getDBStats, getHistory, getLabeledVectors, getRecentEvents,
   getModelHistory, getAllVectors, getUnexportedVectors, markVectorsExported
 } from '../services/database.js'
-import { retrainHABOracle, runInference, PHASE_THRESHOLDS } from '../services/mlTrainer.js'
+import { retrainHABOracle, runInference, exportVectorsCSV, PHASE_THRESHOLDS, FEATURE_KEYS } from '../services/mlTrainer.js'
 import { buildFeatureVector, autoLabel, THRESHOLDS } from '../services/crossSensor.js'
+import { getSourceHealthSummary } from '../services/database.js'
 
 const router = express.Router()
 
@@ -141,6 +142,78 @@ router.get('/models', async (req, res) => {
 
 router.get('/thresholds', (req, res) => {
   res.json({ thresholds: THRESHOLDS, phaseThresholds: PHASE_THRESHOLDS })
+})
+
+router.get('/feature-keys', (req, res) => {
+  res.json({ keys: FEATURE_KEYS, count: FEATURE_KEYS.length })
+})
+
+router.get('/export-csv', async (req, res) => {
+  try {
+    const limit = Math.min(parseInt(req.query.limit) || 500, 5000)
+    const vectors = await getAllVectors(limit)
+    const csv = exportVectorsCSV(vectors)
+    res.setHeader('Content-Type', 'text/csv')
+    res.setHeader('Content-Disposition', `attachment; filename=terrawatch_vectors_${Date.now()}.csv`)
+    res.send(csv)
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
+router.post('/explain', async (req, res) => {
+  try {
+    const getData = req.app.locals.getLatestData
+    const data = getData ? getData() : {}
+    const vector = buildFeatureVector(data)
+    const result = await runInference(vector)
+    res.json({
+      prediction: result.prediction,
+      probability: result.probability,
+      confidence: result.confidence,
+      riskLevel: result.riskLevel,
+      shap: result.shap,
+      modelVersion: result.modelVersion,
+      modelPhase: result.modelPhase,
+      timestamp: new Date().toISOString(),
+    })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
+router.get('/explain/latest', async (req, res) => {
+  try {
+    const getData = req.app.locals.getLatestData
+    const data = getData ? getData() : {}
+    const vector = buildFeatureVector(data)
+    const result = await runInference(vector)
+    res.json({
+      prediction: result.prediction,
+      probability: result.probability,
+      label: result.label,
+      confidence: result.confidence,
+      riskLevel: result.riskLevel,
+      shap: result.shap,
+      narrative: result.shap ? `Top drivers: ${Object.entries(result.shap).sort(([,a],[,b]) => Math.abs(b) - Math.abs(a)).slice(0,3).map(([k,v]) => `${k} (${v > 0 ? '+' : ''}${v.toFixed(3)})`).join(', ')}` : null,
+      modelVersion: result.modelVersion,
+      modelPhase: result.modelPhase,
+      nFeatures: result.nFeatures,
+      timestamp: new Date().toISOString(),
+    })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
+router.get('/source-health', async (req, res) => {
+  try {
+    const hours = parseInt(req.query.hours) || 24
+    const summary = await getSourceHealthSummary(hours)
+    res.json({ sources: summary, hours, timestamp: new Date().toISOString() })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
 })
 
 export default router

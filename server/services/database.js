@@ -28,12 +28,15 @@ const SCHEMA = `
   CREATE INDEX IF NOT EXISTS idx_sr_station ON sensor_readings(station, param, ts DESC);
 
   CREATE TABLE IF NOT EXISTS feature_vectors (
-    id         INTEGER PRIMARY KEY AUTOINCREMENT,
-    ts         INTEGER NOT NULL,
-    features   TEXT NOT NULL,
-    label_hab  INTEGER,
-    label_hypoxia INTEGER,
-    phase3_exported INTEGER DEFAULT 0
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    ts              INTEGER NOT NULL,
+    features        TEXT NOT NULL,
+    label_hab       INTEGER,
+    label_hypoxia   INTEGER,
+    phase3_exported INTEGER DEFAULT 0,
+    source_count    INTEGER DEFAULT 0,
+    gap_filled_fields TEXT,
+    adph_confirmed  INTEGER DEFAULT 0
   );
   CREATE INDEX IF NOT EXISTS idx_fv_ts ON feature_vectors(ts DESC);
 
@@ -72,6 +75,39 @@ const SCHEMA = `
     promoted  INTEGER DEFAULT 0,
     notes     TEXT
   );
+
+  CREATE TABLE IF NOT EXISTS schema_versions (
+    id        INTEGER PRIMARY KEY AUTOINCREMENT,
+    version   TEXT NOT NULL,
+    applied   INTEGER NOT NULL,
+    notes     TEXT
+  );
+
+  CREATE TABLE IF NOT EXISTS data_source_health (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    ts          INTEGER NOT NULL,
+    source_name TEXT NOT NULL,
+    status      TEXT NOT NULL,
+    latency_ms  INTEGER,
+    records     INTEGER DEFAULT 0,
+    error       TEXT,
+    meta        TEXT
+  );
+  CREATE INDEX IF NOT EXISTS idx_dsh_ts ON data_source_health(ts DESC);
+  CREATE INDEX IF NOT EXISTS idx_dsh_src ON data_source_health(source_name, ts DESC);
+
+  CREATE TABLE IF NOT EXISTS openeo_jobs (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    job_id      TEXT NOT NULL,
+    ts_created  INTEGER NOT NULL,
+    ts_updated  INTEGER,
+    status      TEXT NOT NULL,
+    algorithm   TEXT,
+    bbox        TEXT,
+    result_url  TEXT,
+    meta        TEXT
+  );
+  CREATE INDEX IF NOT EXISTS idx_oej_status ON openeo_jobs(status);
 `
 
 export async function getDB() {
@@ -113,11 +149,11 @@ export async function writeReadings(rows) {
   saveDB()
 }
 
-export async function writeFeatureVector(ts, features, labels = {}) {
+export async function writeFeatureVector(ts, features, labels = {}, meta = {}) {
   const db = await getDB()
   db.run(
-    'INSERT INTO feature_vectors (ts,features,label_hab,label_hypoxia) VALUES (?,?,?,?)',
-    [ts, JSON.stringify(features), labels.hab ?? null, labels.hypoxia ?? null]
+    'INSERT INTO feature_vectors (ts,features,label_hab,label_hypoxia,source_count,gap_filled_fields,adph_confirmed) VALUES (?,?,?,?,?,?,?)',
+    [ts, JSON.stringify(features), labels.hab ?? null, labels.hypoxia ?? null, meta.sourceCount ?? null, meta.gapFilledFields ?? null, meta.adphConfirmed ?? null]
   )
   saveDB()
 }
@@ -303,4 +339,108 @@ export async function writeRetrainLog(entry) {
     [Date.now(), entry.status, entry.accuracy||null, entry.prevAccuracy||null, entry.nSamples||0, entry.promoted?1:0, entry.notes||'']
   )
   saveDB()
+}
+
+export async function writeSourceHealth(sourceName, status, latencyMs = null, records = 0, error = null, meta = null) {
+  const db = await getDB()
+  db.run(
+    'INSERT INTO data_source_health (ts,source_name,status,latency_ms,records,error,meta) VALUES (?,?,?,?,?,?,?)',
+    [Date.now(), sourceName, status, latencyMs, records, error, meta ? JSON.stringify(meta) : null]
+  )
+  saveDB()
+}
+
+export async function getSourceHealthSummary(hours = 24) {
+  const db = await getDB()
+  const since = Date.now() - hours * 3600000
+  const stmt = db.prepare(
+    `SELECT source_name, status, latency_ms, records, error, ts
+     FROM data_source_health
+     WHERE ts > ?
+     ORDER BY ts DESC`
+  )
+  stmt.bind([since])
+  const rows = []
+  while (stmt.step()) rows.push(stmt.getAsObject())
+  stmt.free()
+
+  const sources = {}
+  for (const row of rows) {
+    if (!sources[row.source_name]) {
+      sources[row.source_name] = {
+        source: row.source_name,
+        latestStatus: row.status,
+        latestTs: row.ts,
+        avgLatency: null,
+        totalChecks: 0,
+        failures: 0,
+        latencies: [],
+      }
+    }
+    const s = sources[row.source_name]
+    s.totalChecks++
+    if (row.status === 'error' || row.status === 'timeout') s.failures++
+    if (row.latency_ms != null) s.latencies.push(row.latency_ms)
+  }
+
+  for (const s of Object.values(sources)) {
+    s.avgLatency = s.latencies.length ? Math.round(s.latencies.reduce((a,b) => a+b, 0) / s.latencies.length) : null
+    s.uptime = s.totalChecks > 0 ? Math.round((1 - s.failures / s.totalChecks) * 1000) / 10 : null
+    delete s.latencies
+  }
+
+  return Object.values(sources)
+}
+
+export async function upsertOpenEOJob(jobId, status, algorithm = null, bbox = null, resultUrl = null, meta = null) {
+  const db = await getDB()
+  const checkStmt = db.prepare('SELECT id FROM openeo_jobs WHERE job_id = ?')
+  checkStmt.bind([jobId])
+  const exists = checkStmt.step()
+  checkStmt.free()
+  if (exists) {
+    db.run(
+      'UPDATE openeo_jobs SET ts_updated=?, status=?, result_url=COALESCE(?,result_url), meta=COALESCE(?,meta) WHERE job_id=?',
+      [Date.now(), status, resultUrl, meta ? JSON.stringify(meta) : null, jobId]
+    )
+  } else {
+    db.run(
+      'INSERT INTO openeo_jobs (job_id,ts_created,ts_updated,status,algorithm,bbox,result_url,meta) VALUES (?,?,?,?,?,?,?,?)',
+      [jobId, Date.now(), Date.now(), status, algorithm, bbox, resultUrl, meta ? JSON.stringify(meta) : null]
+    )
+  }
+  saveDB()
+}
+
+export async function getOpenEOJob(jobId) {
+  const db = await getDB()
+  const stmt = db.prepare('SELECT * FROM openeo_jobs WHERE job_id=? LIMIT 1')
+  stmt.bind([jobId])
+  const row = stmt.step() ? stmt.getAsObject() : null
+  stmt.free()
+  if (row?.meta) try { row.meta = JSON.parse(row.meta) } catch (parseErr) { /* keep raw meta string */ }
+  return row
+}
+
+export async function getLatestVector() {
+  const db = await getDB()
+  const stmt = db.prepare('SELECT ts, features, label_hab, label_hypoxia FROM feature_vectors ORDER BY ts DESC LIMIT 1')
+  const row = stmt.step() ? stmt.getAsObject() : null
+  stmt.free()
+  if (row?.features) row.features = typeof row.features === 'string' ? JSON.parse(row.features) : row.features
+  return row
+}
+
+export async function getRecentVectors(limit = 50) {
+  const db = await getDB()
+  const stmt = db.prepare('SELECT ts, features FROM feature_vectors ORDER BY ts DESC LIMIT ?')
+  stmt.bind([limit])
+  const rows = []
+  while (stmt.step()) {
+    const r = stmt.getAsObject()
+    r.features = typeof r.features === 'string' ? JSON.parse(r.features) : r.features
+    rows.push(r)
+  }
+  stmt.free()
+  return rows
 }

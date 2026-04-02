@@ -213,6 +213,27 @@ export async function getDigitalCoastDatasets(bbox = '-89.0,29.8,-87.3,31.2') {
   }
 }
 
+export function extractHYCOMScalars(hycomData) {
+  if (!hycomData?.available) return {}
+  const d = hycomData.data || hycomData
+  return {
+    hycom_ssh_m: d.ssh ?? null,
+    hycom_sst_c: d.sst ?? d.water_temp ?? null,
+    hycom_salinity_psu: d.salinity ?? null,
+    hycom_current_u: d.u_current ?? null,
+    hycom_current_v: d.v_current ?? null,
+  }
+}
+
+export function extractCoastWatchScalars(cwData) {
+  if (!cwData?.available) return {}
+  return {
+    coastwatch_chl_ug_l: cwData.chlorophyll_mean ?? null,
+    coastwatch_chl_max: cwData.chlorophyll_max ?? null,
+    coastwatch_pixels: cwData.validPixels ?? null,
+  }
+}
+
 export async function getAllOceanStatus() {
   const [cmems, hycom, coastwatch, digitalcoast] = await Promise.allSettled([
     getCMEMSOceanPhysics(),

@@ -7,24 +7,39 @@ const DATASET_1KM  = 'ucsdHfrE1'
 const AOI = { latMin: 30.0, latMax: 31.2, lonMin: -88.8, lonMax: -87.5 }
 
 export async function getMobileBayCurrents(resolution = '6km') {
-  const dataset = resolution === '1km' ? DATASET_1KM : DATASET_6KM
+  const TOPO_ALT = `${ERDDAP_BASE}/ucsdHfrE2.json`
 
-  try {
-    const url = `${ERDDAP_BASE}/${dataset}.json`
-    const query = `u[(last)][${AOI.latMin}:${AOI.latMax}][${AOI.lonMin}:${AOI.lonMax}],v[(last)][${AOI.latMin}:${AOI.latMax}][${AOI.lonMin}:${AOI.lonMax}]`
+  const datasets = [
+    resolution === '1km' ? DATASET_1KM : DATASET_6KM,
+    resolution === '1km' ? DATASET_6KM : DATASET_1KM,
+  ]
 
-    const { data } = await axios.get(`${url}?${encodeURIComponent(query)}`, { timeout: 15000 })
-    return parseErddapCurrents(data, resolution)
-  } catch (err) {
+  for (const dataset of datasets) {
     try {
-      const altUrl = `${ERDDAP_BASE}/${dataset}.json?u%5B(last)%5D%5B${AOI.latMin}%3A${AOI.latMax}%5D%5B${AOI.lonMin}%3A${AOI.lonMax}%5D%2Cv%5B(last)%5D%5B${AOI.latMin}%3A${AOI.latMax}%5D%5B${AOI.lonMin}%3A${AOI.lonMax}%5D`
-      const { data } = await axios.get(altUrl, { timeout: 15000 })
+      const url = `${ERDDAP_BASE}/${dataset}.json`
+      const query = `u[(last)][${AOI.latMin}:${AOI.latMax}][${AOI.lonMin}:${AOI.lonMax}],v[(last)][${AOI.latMin}:${AOI.latMax}][${AOI.lonMin}:${AOI.lonMax}]`
+      const { data } = await axios.get(`${url}?${encodeURIComponent(query)}`, { timeout: 15000 })
       return parseErddapCurrents(data, resolution)
-    } catch (err2) {
-      console.error('[HF Radar] ERDDAP error:', err2.message)
-      return { available: false, error: err2.message, note: 'HF Radar data unavailable' }
+    } catch (err) {
+      try {
+        const altUrl = `${ERDDAP_BASE}/${dataset}.json?u%5B(last)%5D%5B${AOI.latMin}%3A${AOI.latMax}%5D%5B${AOI.lonMin}%3A${AOI.lonMax}%5D%2Cv%5B(last)%5D%5B${AOI.latMin}%3A${AOI.latMax}%5D%5B${AOI.lonMin}%3A${AOI.lonMax}%5D`
+        const { data } = await axios.get(altUrl, { timeout: 15000 })
+        return parseErddapCurrents(data, resolution)
+      } catch (err3) {
+        console.warn(`[HF Radar] ${dataset} alt URL also failed: ${err3.message}`)
+      }
     }
   }
+
+  try {
+    const { data } = await axios.get(TOPO_ALT, { timeout: 15000 })
+    return parseErddapCurrents(data, resolution)
+  } catch (err4) {
+    console.warn('[HF Radar] Fallback dataset also failed:', err4.message)
+  }
+
+  console.error('[HF Radar] All endpoints failed')
+  return { available: false, error: 'All HF Radar endpoints unreachable', note: 'Tried 6km, 1km, and THREDDS fallback' }
 }
 
 export async function getCurrentSummary() {

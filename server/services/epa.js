@@ -82,6 +82,24 @@ export async function getWQPResults(params = {}) {
   }
 }
 
+export async function getWQPDO2() {
+  try {
+    const result = await getWQPResults({
+      characteristic: 'Dissolved oxygen (DO)',
+      startDate: new Date(Date.now() - 7 * 86400000).toISOString().split('T')[0],
+    })
+    if (!result.available || !result.results?.length) return null
+    const doValues = result.results
+      .filter(r => r.characteristic === 'Dissolved oxygen (DO)' && r.value != null)
+      .sort((a, b) => new Date(b.date) - new Date(a.date))
+    if (doValues.length === 0) return null
+    return doValues[0].value
+  } catch (err) {
+    console.error('[WQP DO2]', err.message)
+    return null
+  }
+}
+
 const AIRNOW_BASE = 'https://www.airnowapi.org/aq'
 
 export async function getMobileAQI() {

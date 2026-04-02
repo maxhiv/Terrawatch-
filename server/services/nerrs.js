@@ -44,18 +44,20 @@ export async function getNERRSLatest(stationCode = NERRS_STATIONS.WEEKS_BAY_WQ, 
 }
 
 export async function getWeeksBayLatest() {
-  const [wq, met] = await Promise.allSettled([
+  const [wq, met, wq2] = await Promise.allSettled([
     getNERRSLatest(NERRS_STATIONS.WEEKS_BAY_WQ, 1),
     getNERRSLatest(NERRS_STATIONS.WEEKS_BAY_MET, 1),
+    getNERRSLatest(NERRS_STATIONS.WEEKS_BAY_WQ2, 1),
   ])
 
   return {
     waterQuality: wq.value || { available: false },
     meteorological: met.value || { available: false },
+    secondary: wq2.value || { available: false },
     stationName: 'Weeks Bay NERR — Mobile Bay, Alabama',
     reserve: 'Weeks Bay National Estuarine Research Reserve',
     dataUrl: 'https://cdmo.baruch.sc.edu/',
-    note: 'Real-time data from the instrumented dock at Weeks Bay NERR',
+    note: 'Real-time data from the instrumented dock at Weeks Bay NERR. Includes secondary station wekbwq.',
   }
 }
 
@@ -72,6 +74,14 @@ export async function getWeeksBayTimeSeries(param = 'DO_mgl', days = 7) {
       .filter(r => r[param] != null)
       .map(r => ({ timestamp: r.DateTimeStamp, value: r[param] })),
   }
+}
+
+export async function getNERRSSecondaryWQ() {
+  return getNERRSLatest(NERRS_STATIONS.WEEKS_BAY_WQ2, 1)
+}
+
+export async function getNERRSMeteorologicalData() {
+  return getNERRSLatest(NERRS_STATIONS.WEEKS_BAY_MET, 24)
 }
 
 function parseNERRSXML(xmlText, stationCode) {

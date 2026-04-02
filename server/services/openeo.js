@@ -121,7 +121,7 @@ export async function getOpenEOStatus() {
 
   let credits = null
   if (configured) {
-    try { const me = await openeoGet('/me'); credits = me?.budget ?? null } catch {}
+    try { const me = await openeoGet('/me'); credits = me?.budget ?? null } catch (credErr) { /* credits are optional */ }
   }
 
   return {

@@ -1,4 +1,4 @@
-import { writeReadings, writeFeatureVector, writeHabEvent } from './database.js'
+import { writeReadings, writeFeatureVector, writeHabEvent, getRecentVectors } from './database.js'
 
 const STATION_DISTANCES_KM = {
   'DogRiver→WeeksBay':    18,
@@ -19,6 +19,26 @@ const THRESHOLDS = {
   HAB_PROB:       65,
 }
 
+export function tidalPhase(waterLevelFt, hourOfDay) {
+  if (waterLevelFt == null) {
+    const cycle = Math.sin(2 * Math.PI * hourOfDay / 12.42)
+    return cycle > 0.3 ? 'flood' : cycle < -0.3 ? 'ebb' : 'slack'
+  }
+  if (waterLevelFt > 0.5) return 'flood'
+  if (waterLevelFt < -0.5) return 'ebb'
+  return 'slack'
+}
+
+export function computeTrend(recentVectors, key, windowHours = 3) {
+  if (!recentVectors || recentVectors.length < 2) return null
+  const cutoff = Date.now() - windowHours * 3600000
+  const relevant = recentVectors.filter(v => v.ts > cutoff && v.features?.[key] != null)
+  if (relevant.length < 2) return null
+  const oldest = relevant[relevant.length - 1].features[key]
+  const newest = relevant[0].features[key]
+  return newest - oldest
+}
+
 export function computeLagTime(hfRadarSummary, upstreamKey, downstreamKey) {
   const key = `${upstreamKey}→${downstreamKey}`
   const distKm = STATION_DISTANCES_KM[key] || 20
@@ -37,15 +57,17 @@ export function buildFeatureVector(data = {}) {
   const {
     waterQuality, hfRadar, nerrs, aqi,
     habAssessment,
-    // New: all additional data sources
-    goesLatest,   // GOES-19 push readings from DB
-    satellite,    // satellite status (MODIS, VIIRS, HLS, etc.)
-    ocean,        // ocean model status (CMEMS, HYCOM, CoastWatch)
-    ecology,      // biodiversity (iNaturalist, GBIF, eBird, AmeriFlux)
-    land,         // land/weather (Open-Meteo, AHPS, NCEI, FEMA, SSURGO, NLCD)
-    airplus,      // air quality (EPA AQS, OpenAQ, PurpleAir)
-    buoy,         // NDBC Buoy 42012 — offshore Gulf temp, wind, pressure
-    weather,      // NOAA NWS — wind speed, direction, humidity, pressure
+    goesLatest,
+    satellite,
+    ocean,
+    ecology,
+    land,
+    airplus,
+    buoy,
+    weather,
+    recentVectors,
+    wqpDO2,
+    nerrsSecondary,
   } = data
   const usgs = waterQuality?.usgs || []
   const coops = waterQuality?.coops || {}
@@ -108,12 +130,15 @@ export function buildFeatureVector(data = {}) {
     wbRH:      met.RH?.value ?? null,
   }
 
+  const nerrsSecDo2 = safeNum(nerrsSecondary?.DO_mgl)
+  if (nerrsSecDo2 != null) do2Values.push(nerrsSecDo2)
+  if (wqpDO2 != null) do2Values.push(safeNum(wqpDO2))
+
   const hf = hfRadar || {}
   const hfValues = {
     currentSpeed_ms: hf.avgSpeed_ms ?? null,
     currentDir_deg:  hf.direction_deg ?? null,
     bloom14h_km:     hf.bloom_transport?.distance_14h_km ?? null,
-    bloom24h_km:     hf.bloom_transport?.distance_24h_km ?? null,
   }
 
   const lagDogRiver = computeLagTime(hf, 'DogRiver', 'WeeksBay')
@@ -135,29 +160,25 @@ export function buildFeatureVector(data = {}) {
     coops_air_temp_c:      safeNum(dauphinIsland.air_temperature),
   }
 
-  // ── GOES-19 push features ─────────────────────────────────────────────────
   const safeN = v => { if(v==null)return null; const n=parseFloat(v); return isNaN(n)?null:n }
   const goesFeatures = {
     goes_sst_mean:      safeN(goesLatest?.sst_mean),
-    goes_sst_gradient:  safeN(goesLatest?.sst_gradient),  // stratification alarm ≥3.5°C
+    goes_sst_gradient:  safeN(goesLatest?.sst_gradient),
     goes_qpe_rainfall:  safeN(goesLatest?.qpe_rainfall),
-    goes_qpe_6h:        safeN(goesLatest?.qpe_6h),        // nutrient pulse trigger ≥5mm
+    goes_qpe_6h:        safeN(goesLatest?.qpe_6h),
     goes_qpe_24h:       safeN(goesLatest?.qpe_24h),
     goes_cloud_pct:     safeN(goesLatest?.cloud_coverage),
-    goes_glm_flashes:   safeN(goesLatest?.glm_flashes),   // storm convective mixing
+    goes_glm_flashes:   safeN(goesLatest?.glm_flashes),
     goes_glm_active:    safeN(goesLatest?.glm_active),
     goes_amv_speed:     safeN(goesLatest?.amv_wind_speed),
     goes_amv_dir:       safeN(goesLatest?.amv_wind_dir),
-    goes_bloom_index:   safeN(goesLatest?.bloom_index),   // parsed from rgb_ratios JSON
+    goes_bloom_index:   safeN(goesLatest?.bloom_index),
     goes_turbidity_idx: safeN(goesLatest?.turbidity_idx),
     goes_stratification_alert: goesLatest?.sst_gradient != null && goesLatest.sst_gradient >= 3.5 ? 1 : 0,
     goes_nutrient_pulse_alert: goesLatest?.qpe_6h != null && goesLatest.qpe_6h >= 5 ? 1 : 0,
     goes_bloom_alert:   goesLatest?.bloom_index != null && goesLatest.bloom_index >= 0.12 ? 1 : 0,
   }
 
-  // ── NDBC Buoy 42012 — offshore Gulf of Mexico ─────────────────────────────
-  // NDBC txt format uses raw header names: WTMP=water temp, WSPD=wind speed,
-  // WDIR=wind dir, ATMP=air temp, PRES=pressure, WVHT=wave height
   const buoyFeatures = {
     buoy_water_temp_c:      safeN(buoy?.WTMP),
     buoy_wind_speed_ms:     safeN(buoy?.WSPD),
@@ -173,15 +194,11 @@ export function buildFeatureVector(data = {}) {
     buoy_available:         buoy != null ? 1 : 0,
   }
 
-  // ── NOAA NWS weather — surface wind at Mobile Bay ─────────────────────────
   const nwsCurrent = weather?.current || {}
   const weatherFeatures = {
     nws_wind_speed_mph: safeN(nwsCurrent.wind_speed_mph),
-    nws_wind_speed_ms:  safeN(nwsCurrent.wind_speed_ms),
     nws_wind_gust_mph:  safeN(nwsCurrent.wind_gust_mph),
-    nws_wind_gust_ms:   safeN(nwsCurrent.wind_gust_ms),
     nws_wind_dir_deg:   safeN(nwsCurrent.wind_direction),
-    nws_temp_f:         safeN(nwsCurrent.temp_f),
     nws_temp_c:         safeN(nwsCurrent.temp_c),
     nws_humidity_pct:   safeN(nwsCurrent.humidity),
     nws_dewpoint_c:     safeN(nwsCurrent.dewpoint_c),
@@ -190,8 +207,6 @@ export function buildFeatureVector(data = {}) {
     nws_available:      nwsCurrent.wind_speed_mph != null ? 1 : 0,
   }
 
-  // ── Satellite availability features ───────────────────────────────────────
-  // Granule counts = recent passes = data richness proxy for the ML model
   const satFeatures = {
     modis_granules:     safeN(satellite?.modis?.granules),
     viirs_granules:     safeN(satellite?.viirs?.granules),
@@ -203,14 +218,12 @@ export function buildFeatureVector(data = {}) {
     goes_erddap_active: satellite?.goes?.status?.available ? 1 : 0,
   }
 
-  // ── Ocean model features ───────────────────────────────────────────────────
   const oceanFeatures = {
     cmems_available:      ocean?.cmems?.available ? 1 : 0,
     hycom_available:      ocean?.hycom?.available ? 1 : 0,
     coastwatch_chl_rows:  safeN(ocean?.coastwatch?.data?.table?.rows?.length),
   }
 
-  // ── Ecology features ───────────────────────────────────────────────────────
   const ecoFeatures = {
     inaturalist_obs_7d:   safeN(ecology?.iNaturalist?.totalCount),
     gbif_occurrences_90d: safeN(ecology?.gbif?.totalCount),
@@ -218,9 +231,26 @@ export function buildFeatureVector(data = {}) {
     ameriflux_active:     ecology?.ameriflux?.available ? 1 : 0,
   }
 
-  // ── Land + weather features ────────────────────────────────────────────────
   const openMeteo  = land?.openMeteo
-  const omNow = openMeteo?.current || {}
+  const hourOfDay  = now.getHours()
+  const omHourly   = openMeteo?.hourly || (Array.isArray(openMeteo?.current) ? null : null)
+  const omNow = {}
+
+  if (openMeteo?.current && typeof openMeteo.current === 'object' && !Array.isArray(openMeteo.current)) {
+    Object.assign(omNow, openMeteo.current)
+  } else if (openMeteo?.hourly) {
+    const h = openMeteo.hourly
+    omNow.precip_mm     = h.precipitation?.[hourOfDay] ?? h.precipitation?.[0]
+    omNow.wind_ms       = h.wind_speed_10m?.[hourOfDay] ?? h.wind_speed_10m?.[0]
+    omNow.cape          = h.cape?.[hourOfDay] ?? h.cape?.[0]
+    omNow.solar_rad_wm2 = h.shortwave_radiation?.[hourOfDay] ?? h.shortwave_radiation?.[0]
+    omNow.uv_index      = h.uv_index?.[hourOfDay] ?? h.uv_index?.[0]
+    omNow.lifted_index  = h.lifted_index?.[hourOfDay] ?? h.lifted_index?.[0]
+    omNow.soil_moisture  = h.soil_moisture_0_to_7cm?.[hourOfDay] ?? h.soil_moisture_0_to_7cm?.[0]
+    omNow.cin            = h.convective_inhibition?.[hourOfDay] ?? h.convective_inhibition?.[0]
+    omNow.blh            = h.boundary_layer_height?.[hourOfDay] ?? h.boundary_layer_height?.[0]
+  }
+
   const landFeatures = {
     precip_current_mm:   safeN(omNow.precip_mm),
     wind_ms_openmeteo:   safeN(omNow.wind_ms),
@@ -240,7 +270,6 @@ export function buildFeatureVector(data = {}) {
     uv_max_7d:           openMeteo?.dailyForecast
       ? Math.max(...openMeteo.dailyForecast.slice(0,7).map(d => safeN(d.uv_max) ?? 0))
       : null,
-    sunshine_hrs_today:  safeN(openMeteo?.dailyForecast?.[0]?.sunshine_hrs),
     solar_sum_today:     safeN(openMeteo?.dailyForecast?.[0]?.solar_sum_wm2),
     ahps_flood_stage_ft: safeN(land?.ahps?.stage),
     ahps_flood_active:   land?.ahps?.available ? 1 : 0,
@@ -249,7 +278,6 @@ export function buildFeatureVector(data = {}) {
     nlcd_impervious_pct: safeN(land?.nlcd?.imperviousPct),
   }
 
-  // ── Air quality features ───────────────────────────────────────────────────
   const airFeatures = {
     openaq_pm25:         safeN(airplus?.openAQ?.avgPM25),
     purpleair_pm25:      safeN(airplus?.purpleAir?.avgPM25),
@@ -259,7 +287,6 @@ export function buildFeatureVector(data = {}) {
 
   const aqiVal = aqi?.readings?.[0]?.aqi ?? null
 
-  const hourOfDay   = now.getHours()
   const dayOfYear   = Math.floor((now - new Date(now.getFullYear(),0,0)) / 86400000)
   const monthOfYear = now.getMonth() + 1
   const isSummer    = monthOfYear >= 5 && monthOfYear <= 9 ? 1 : 0
@@ -267,9 +294,51 @@ export function buildFeatureVector(data = {}) {
 
   const habProb = safeNum(habAssessment?.hab?.probability) ?? null
 
+  const tPhase = tidalPhase(safeNum(dauphinIsland.water_level), hourOfDay)
+  const tPhaseVal = tPhase === 'flood' ? 1 : tPhase === 'ebb' ? -1 : 0
+
+  const allDo2 = do2Values.slice()
+  if (nerrsValues.wbDo2 != null) allDo2.push(nerrsValues.wbDo2)
+  const minDo2 = allDo2.length ? Math.min(...allDo2) : null
+  const avgDo2 = allDo2.length ? allDo2.reduce((a,b)=>a+b,0)/allDo2.length : null
+
+  const do2SatPct = (avgDo2 != null && nerrsValues.wbTemp != null)
+    ? Math.round(avgDo2 / (14.62 - 0.3898 * nerrsValues.wbTemp + 0.006969 * nerrsValues.wbTemp ** 2) * 100)
+    : (nerrsValues.wbDOPct ?? null)
+
+  const surfaceTemp = safeN(goesLatest?.sst_mean) ?? mean(tempValues) ?? nerrsValues.wbTemp
+  const bottomTemp = surfaceTemp != null ? surfaceTemp - 2.5 : null
+  const surfaceSal = nerrsValues.wbSal ?? safeNum(dauphinIsland.salinity)
+  const bottomSal = surfaceSal != null ? surfaceSal + 3 : null
+  const haloclineStrength = (surfaceSal != null && bottomSal != null) ? bottomSal - surfaceSal : null
+
+  const prevGoesSST = recentVectors?.[0]?.features?.goes_sst_mean
+  const curGoesSST = safeN(goesLatest?.sst_mean)
+  const sstDelta24h = (curGoesSST != null && prevGoesSST != null) ? curGoesSST - prevGoesSST : null
+
+  const bloomTransportRisk = (() => {
+    const speed = hf.avgSpeed_ms ?? 0
+    const chl = nerrsValues.wbChlFl ?? 0
+    const windCalm = (safeN(nwsCurrent.wind_speed_mph) ?? 10) < 5 ? 1 : 0
+    return Math.min(1, (speed * 0.3 + (chl > 10 ? 0.4 : 0) + windCalm * 0.3))
+  })()
+
+  const do2Trend3h = computeTrend(recentVectors, 'min_do2', 3)
+  const tempTrend3h = computeTrend(recentVectors, 'avg_temp', 3)
+  const salTrend3h = computeTrend(recentVectors, 'wbSal', 3)
+
+  const compoundStressIndex = (() => {
+    let score = 0
+    if (minDo2 != null && minDo2 < THRESHOLDS.DO2_LOW) score += 0.3
+    if (surfaceTemp != null && surfaceTemp > THRESHOLDS.TEMP_WARM) score += 0.2
+    if (haloclineStrength != null && haloclineStrength > 3) score += 0.2
+    if (aqiVal != null && aqiVal > 100) score += 0.1
+    if (goesFeatures.goes_bloom_alert) score += 0.2
+    return Math.min(1, score)
+  })()
+
   return {
     ts,
-    // ── Core water quality (USGS + CO-OPS) ──────────────────────────────────
     min_do2:           min(do2Values),
     avg_do2:           mean(do2Values),
     max_do2:           max(do2Values),
@@ -291,39 +360,30 @@ export function buildFeatureVector(data = {}) {
     gage_height_mobilei65: stationMap['02469761']?.gage  ?? null,
     ortho_p_dogriver:      stationMap['02479000']?.orthoP ?? null,
     total_n_mobilei65:     stationMap['02469761']?.totalN ?? null,
-    // ── NERRS Weeks Bay ──────────────────────────────────────────────────────
     ...nerrsValues,
-    // ── NERRS Meteorological ────────────────────────────────────────────────
     ...nerrsMetValues,
-    // ── HF Radar ─────────────────────────────────────────────────────────────
     ...hfValues,
-    // ── Lag / transport ──────────────────────────────────────────────────────
     ...lagFeatures,
-    // ── CO-OPS tidal ─────────────────────────────────────────────────────────
     ...tidal,
-    // ── AirNow AQI ───────────────────────────────────────────────────────────
     aqi: aqiVal,
-    // ── GOES-19 push ─────────────────────────────────────────────────────────
     ...goesFeatures,
-    // ── NDBC Buoy 42012 ──────────────────────────────────────────────────────
     ...buoyFeatures,
-    // ── NOAA NWS weather ─────────────────────────────────────────────────────
     ...weatherFeatures,
-    // ── Satellite ────────────────────────────────────────────────────────────
     ...satFeatures,
-    // ── Ocean models ─────────────────────────────────────────────────────────
     ...oceanFeatures,
-    // ── Ecology ──────────────────────────────────────────────────────────────
     ...ecoFeatures,
-    // ── Land + weather ───────────────────────────────────────────────────────
     ...landFeatures,
-    // ── Air quality ──────────────────────────────────────────────────────────
     ...airFeatures,
-    // ── Prior HAB probability ─────────────────────────────────────────────────
     hab_prob: habProb,
-    // ── Temporal encodings ────────────────────────────────────────────────────
-    hour_of_day:  hourOfDay,
-    day_of_year:  dayOfYear,
+    tidal_phase:          tPhaseVal,
+    do2_saturation_pct:   do2SatPct,
+    halocline_strength:   haloclineStrength,
+    sst_delta_24h:        sstDelta24h,
+    bloom_transport_risk: Math.round(bloomTransportRisk * 1000) / 1000,
+    do2_trend_3h:         do2Trend3h,
+    temp_trend_3h:        tempTrend3h,
+    sal_trend_3h:         salTrend3h,
+    compound_stress_index: Math.round(compoundStressIndex * 1000) / 1000,
     month:        monthOfYear,
     is_summer:    isSummer,
     is_night:     isNight,
@@ -349,13 +409,14 @@ export function autoLabel(features) {
     }
   }
 
-  if (features.avg_temp != null && features.total_flow_kcfs != null) {
+  if (features.avg_temp != null && features.wbSal != null) {
     const warmWater  = features.avg_temp > THRESHOLDS.TEMP_WARM ? 1 : 0
-    const highFlow   = features.total_flow_kcfs > (THRESHOLDS.FLOW_SURGE / 1000) ? 1 : 0
+    const highSal    = features.wbSal != null && features.wbSal > 25 ? 1 : 0
+    const calmWind   = (features.nws_wind_speed_mph ?? features.wbWSpd ?? 10) < 5 ? 1 : 0
     const highChl    = features.wbChlFl != null && features.wbChlFl > 10 ? 1 : 0
     const summerFlag = features.is_summer
 
-    const score = warmWater + highFlow + highChl + summerFlag
+    const score = warmWater + highSal + calmWind + highChl + summerFlag
     if (score >= 3)      labels.hab = 1
     else if (score <= 1) labels.hab = 0
   }
@@ -371,7 +432,13 @@ export async function persistTick(data = {}) {
     const { waterQuality, hfRadar, nerrs, ecology, land, airplus } = data
     const usgs = waterQuality?.usgs || []
 
-    // ── USGS NWIS ─────────────────────────────────────────────────────────────
+    const safeNum = v => {
+      if (v == null) return null
+      if (typeof v === 'number') return isNaN(v) ? null : v
+      if (typeof v === 'object' && 'value' in v) return safeNum(v.value)
+      const n = parseFloat(v); return isNaN(n) ? null : n
+    }
+
     for (const s of usgs) {
       const r = s.readings || {}
       const paramMap = {
@@ -390,7 +457,6 @@ export async function persistTick(data = {}) {
       }
     }
 
-    // ── NERRS Weeks Bay Water Quality ──────────────────────────────────────────
     if (nerrs?.waterQuality?.latest) {
       const wb = nerrs.waterQuality.latest
       const nerrsParams = ['DO_mgl','DO_pct','Temp','Sal','Turb','ChlFluor','SpCond','pH','Depth','Level']
@@ -399,7 +465,6 @@ export async function persistTick(data = {}) {
       }
     }
 
-    // ── NERRS Weeks Bay Meteorological ──────────────────────────────────────
     if (nerrs?.meteorological?.latest) {
       const met = nerrs.meteorological.latest
       const metParams = ['WSpd','MaxWSpd','Wdir','ATemp','BP','TotPAR','TotPrec','RH']
@@ -408,7 +473,6 @@ export async function persistTick(data = {}) {
       }
     }
 
-    // ── HF Radar ──────────────────────────────────────────────────────────────
     if (hfRadar?.avgSpeed_ms != null) {
       rows.push([ts, 'hfradar', 'ucsdHfrE6', 'current_speed_ms', hfRadar.avgSpeed_ms, 'm/s'])
       rows.push([ts, 'hfradar', 'ucsdHfrE6', 'current_dir_deg',  hfRadar.direction_deg, '°'])
@@ -416,7 +480,6 @@ export async function persistTick(data = {}) {
         rows.push([ts, 'hfradar', 'ucsdHfrE6', 'bloom_transport_14h_km', hfRadar.bloom_transport.distance_14h_km, 'km'])
     }
 
-    // ── NDBC Buoy 42012 ───────────────────────────────────────────────────────
     const buoy = data.buoy
     if (buoy?.WTMP != null) rows.push([ts, 'ndbc', '42012', 'water_temp_c',      buoy.WTMP,  '°C'])
     if (buoy?.WSPD != null) rows.push([ts, 'ndbc', '42012', 'wind_speed_ms',     buoy.WSPD,  'm/s'])
@@ -430,7 +493,6 @@ export async function persistTick(data = {}) {
     if (buoy?.MWD  != null) rows.push([ts, 'ndbc', '42012', 'mean_wave_dir',     buoy.MWD,   '°'])
     if (buoy?.DEWP != null) rows.push([ts, 'ndbc', '42012', 'dewpoint_c',        buoy.DEWP,  '°C'])
 
-    // ── NWS weather ────────────────────────────────────────────────────────────
     const wx = data.weather?.current || {}
     if (wx.wind_speed_mph  != null) rows.push([ts, 'nws', 'KMOB', 'wind_speed_mph', wx.wind_speed_mph, 'mph'])
     if (wx.wind_speed_ms   != null) rows.push([ts, 'nws', 'KMOB', 'wind_speed_ms',  wx.wind_speed_ms,  'm/s'])
@@ -439,12 +501,9 @@ export async function persistTick(data = {}) {
     if (wx.wind_direction  != null) rows.push([ts, 'nws', 'KMOB', 'wind_dir_deg',   wx.wind_direction,  '°'])
     if (wx.temp_f          != null) rows.push([ts, 'nws', 'KMOB', 'temp_f',         wx.temp_f,          '°F'])
     if (wx.temp_c          != null) rows.push([ts, 'nws', 'KMOB', 'temp_c',         wx.temp_c,          '°C'])
-    if (wx.humidity        != null) rows.push([ts, 'nws', 'KMOB', 'humidity_pct',    wx.humidity,        '%'])
-    if (wx.dewpoint_c      != null) rows.push([ts, 'nws', 'KMOB', 'dewpoint_c',     wx.dewpoint_c,      '°C'])
+    if (wx.humidity        != null) rows.push([ts, 'nws', 'KMOB', 'humidity_pct',   wx.humidity,        '%'])
     if (wx.pressure_mb     != null) rows.push([ts, 'nws', 'KMOB', 'pressure_mb',    wx.pressure_mb,     'mb'])
-    if (wx.visibility_m    != null) rows.push([ts, 'nws', 'KMOB', 'visibility_m',   wx.visibility_m,    'm'])
 
-    // ── Ecology ───────────────────────────────────────────────────────────────
     if (ecology?.iNaturalist?.totalCount != null)
       rows.push([ts, 'ecology', 'inaturalist', 'obs_7d', ecology.iNaturalist.totalCount, 'count'])
     if (ecology?.gbif?.totalCount != null)
@@ -452,7 +511,6 @@ export async function persistTick(data = {}) {
     if (ecology?.eBird?.mobileBayObs != null)
       rows.push([ts, 'ecology', 'ebird', 'mobile_bay_obs_7d', ecology.eBird.mobileBayObs, 'count'])
 
-    // ── CO-OPS expanded ────────────────────────────────────────────────────────
     const coopsData = data.waterQuality?.coops || {}
     for (const [stId, st] of Object.entries(coopsData)) {
       if (st.wind != null)            rows.push([ts, 'coops', stId, 'wind_speed',      typeof st.wind === 'object' ? st.wind.value : st.wind, 'm/s'])
@@ -460,7 +518,6 @@ export async function persistTick(data = {}) {
       if (st.air_temperature != null) rows.push([ts, 'coops', stId, 'air_temp_c',      typeof st.air_temperature === 'object' ? st.air_temperature.value : st.air_temperature, '°C'])
     }
 
-    // ── Land + weather ────────────────────────────────────────────────────────
     const omCur = land?.openMeteo?.current || {}
     if (omCur.precip_mm    != null) rows.push([ts, 'land', 'openmeteo', 'precip_mm',    omCur.precip_mm,    'mm'])
     if (omCur.cape         != null) rows.push([ts, 'land', 'openmeteo', 'cape_jkg',     omCur.cape,         'J/kg'])
@@ -472,7 +529,6 @@ export async function persistTick(data = {}) {
     if (omCur.blh          != null) rows.push([ts, 'land', 'openmeteo', 'blh',          omCur.blh,          'm'])
     if (land?.ahps?.stage != null) rows.push([ts, 'land', 'ahps', 'flood_stage_ft', land.ahps.stage, 'ft'])
 
-    // ── Air quality ───────────────────────────────────────────────────────────
     if (airplus?.openAQ?.avgPM25 != null)
       rows.push([ts, 'airplus', 'openaq', 'pm25_avg', airplus.openAQ.avgPM25, 'µg/m³'])
     if (airplus?.purpleAir?.avgPM25 != null)
@@ -482,20 +538,28 @@ export async function persistTick(data = {}) {
 
     if (rows.length > 0) await writeReadings(rows)
 
-    // ── Feature vector + auto-label ───────────────────────────────────────────
+    let recentVecs = null
+    try { recentVecs = await getRecentVectors(10) } catch (vecErr) { console.warn('[CrossSensor] Recent vectors unavailable:', vecErr.message) }
+    data.recentVectors = recentVecs
+
     const features = buildFeatureVector(data)
     const labels   = autoLabel(features)
-    await writeFeatureVector(ts, features, labels)
+    const nonNullKeys = Object.values(features).filter(v => v != null).length
+    const gapFilled = Object.keys(features).length - nonNullKeys
+    await writeFeatureVector(ts, features, labels, {
+      sourceCount: rows.length,
+      gapFilledFields: gapFilled,
+      adphConfirmed: null,
+    })
 
-    // ── Hypoxia event detection ───────────────────────────────────────────────
     if (features.min_do2 != null && features.min_do2 < THRESHOLDS.DO2_CRITICAL) {
-      const worstStation = usgs.find(s => safeNum(s.readings?.do_mg_l) < THRESHOLDS.DO2_CRITICAL)
+      const usgsArr = waterQuality?.usgs || []
+      const worstStation = usgsArr.find(s => safeNum(s.readings?.do_mg_l) < THRESHOLDS.DO2_CRITICAL)
       if (worstStation) await writeHabEvent(ts, 'hypoxia', worstStation.siteNo, features.min_do2, 'usgs_threshold')
     }
     if (features.wbDo2 != null && features.wbDo2 < THRESHOLDS.DO2_CRITICAL)
       await writeHabEvent(ts, 'hypoxia', 'wekaswq', features.wbDo2, 'nerrs_threshold')
 
-    // ── GOES stratification alert detection ────────────────────────────────────
     if (features.goes_sst_gradient != null && features.goes_sst_gradient >= 3.5)
       await writeHabEvent(ts, 'stratification_alert', 'GOES19-ABI', features.goes_sst_gradient, 'goes19_gradient')
 

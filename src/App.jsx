@@ -17,6 +17,10 @@ import ScienceView from './pages/ScienceView.jsx'
 import Intelligence from './pages/Intelligence.jsx'
 import AlertsPage from './pages/Alerts.jsx'
 import AIAssistant from './pages/AIAssistant.jsx'
+import CompoundFlood from './pages/CompoundFlood.jsx'
+import BeachSafety from './pages/BeachSafety.jsx'
+import ClimateVulnerability from './pages/ClimateVulnerability.jsx'
+import PollutionTracker from './pages/PollutionTracker.jsx'
 const DataStream = React.lazy(() => import('./pages/DataStream.jsx'))
 const MasterRoadmap = React.lazy(() => import('./pages/MasterRoadmap.jsx'))
 
@@ -50,6 +54,10 @@ export default function App() {
           <Route path="feeds" element={<FeedStatus />} />
           <Route path="science" element={<ScienceView />} />
           <Route path="intelligence" element={<Intelligence />} />
+          <Route path="compound-flood" element={<CompoundFlood />} />
+          <Route path="beach-safety" element={<BeachSafety />} />
+          <Route path="climate" element={<ClimateVulnerability />} />
+          <Route path="pollution" element={<PollutionTracker />} />
           <Route path="data-stream" element={<Suspense fallback={<div style={{padding:40,textAlign:'center',color:'#6b7280'}}>Loading DataStream…</div>}><DataStream /></Suspense>} />
           <Route path="vision" element={<VisionPage />} />
           <Route path="roadmap" element={<Suspense fallback={<div style={{padding:40,textAlign:'center',color:'#6b7280'}}>Loading Roadmap…</div>}><MasterRoadmap /></Suspense>} />

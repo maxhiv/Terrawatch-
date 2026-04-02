@@ -242,6 +242,31 @@ router.get('/airplus/purpleair', async (req, res) => {
   catch (err) { res.status(500).json({ error: err.message }) }
 })
 
+router.get('/hycom/status', async (req, res) => {
+  try { const m = await getOcean(); res.json(await m.getHYCOMSurfaceConditions()) }
+  catch (err) { res.status(500).json({ error: err.message }) }
+})
+
+router.get('/hycom/surface', async (req, res) => {
+  try { const m = await getOcean(); res.json(await m.getHYCOMSurfaceConditions()) }
+  catch (err) { res.status(500).json({ error: err.message }) }
+})
+
+router.get('/sar/status', async (req, res) => {
+  try {
+    const m = await getOpenEO()
+    const catalog = m.ALGORITHM_CATALOG || []
+    const sarAlgos = catalog.filter(a => a.inputs && a.inputs.toLowerCase().includes('sentinel-1'))
+    res.json({
+      available: true,
+      product: 'Sentinel-1 SAR (via openEO)',
+      algorithms: sarAlgos.map(a => ({ id: a.id, name: a.name, inputs: a.inputs })),
+      note: 'SAR data accessed through openEO CropSAR and MOGPR_S1 algorithms',
+      timestamp: new Date().toISOString(),
+    })
+  } catch (err) { res.status(500).json({ error: err.message }) }
+})
+
 router.get('/goes/status', async (req, res) => {
   try { res.json(await getGOES19Status()) }
   catch (err) { res.status(500).json({ error: err.message }) }

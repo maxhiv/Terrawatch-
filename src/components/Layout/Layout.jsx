@@ -4,7 +4,8 @@ import clsx from 'clsx'
 import {
   LayoutDashboard, FlaskConical, Waves, Droplets, Satellite,
   Microscope, Brain, Radio, Activity, TreePine, Database,
-  Bell, Bot, Cpu, Sparkles, Map as MapIcon, BarChart3
+  Bell, Bot, Cpu, Sparkles, Map as MapIcon, BarChart3,
+  CloudRain, Umbrella, Thermometer, Factory
 } from 'lucide-react'
 
 const NAV = [
@@ -15,9 +16,15 @@ const NAV = [
   { path: '/map', label: 'Satellite Map', Icon: Satellite },
   { path: '/science', label: 'Science View', Icon: Microscope, badge: 'SCIENTIST' },
   { path: '/intelligence', label: 'Intelligence', Icon: Brain, badge: 'ML' },
+  null,
+  { path: '/compound-flood', label: 'Compound Flood', Icon: CloudRain, badge: 'NEW' },
+  { path: '/beach-safety', label: 'Beach Safety', Icon: Umbrella, badge: 'NEW' },
+  { path: '/climate', label: 'Climate Vulnerability', Icon: Thermometer, badge: 'NEW' },
+  { path: '/pollution', label: 'Pollution Tracker', Icon: Factory, badge: 'NEW' },
+  null,
   { path: '/sensors', label: 'Sensor Registry', Icon: Radio },
   { path: '/feeds', label: 'Feed Status', Icon: Activity },
-  { path: '/data-stream', label: 'DataStream', Icon: BarChart3, badge: '141 KEYS' },
+  { path: '/data-stream', label: 'DataStream', Icon: BarChart3, badge: '142 KEYS' },
   null,
   { path: '/wetlandai', label: 'WetlandAI', Icon: TreePine, badge: 'WORLD FIRST' },
   { path: '/sitevault', label: 'SITEVAULT', Icon: Database },

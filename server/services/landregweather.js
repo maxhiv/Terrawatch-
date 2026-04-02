@@ -34,19 +34,33 @@ export async function getOpenMeteoWeather(lat = MOB_LAT, lon = MOB_LON) {
       lat:         data.latitude,
       lon:         data.longitude,
       timezone:    data.timezone,
-      current:     data.hourly ? {
-        temp_c:         data.hourly.temperature_2m?.[0],
-        wind_ms:        data.hourly.wind_speed_10m?.[0],
-        wind_dir:       data.hourly.wind_direction_10m?.[0],
-        precip_mm:      data.hourly.precipitation?.[0],
-        cape:           data.hourly.cape?.[0],
-        solar_rad_wm2:  data.hourly.shortwave_radiation?.[0],
-        uv_index:       data.hourly.uv_index?.[0],
-        lifted_index:   data.hourly.lifted_index?.[0],
-        soil_moisture:  data.hourly.soil_moisture_0_to_7cm?.[0],
-        cin:            data.hourly.convective_inhibition?.[0],
-        blh:            data.hourly.boundary_layer_height?.[0],
-      } : null,
+      current:     data.hourly ? (() => {
+        const now = new Date()
+        const nowISO = now.toISOString().slice(0, 13)
+        const hr = now.getHours()
+        let idx = -1
+        if (data.hourly.time) {
+          idx = data.hourly.time.findIndex(t => t.startsWith(nowISO))
+          if (idx < 0) {
+            const todayStr = now.toISOString().slice(0, 10)
+            idx = data.hourly.time.findIndex(t => t.startsWith(todayStr) && new Date(t).getHours() === hr)
+          }
+        }
+        const i = idx >= 0 ? idx : Math.min(hr, (data.hourly.time?.length ?? 24) - 1)
+        return {
+          temp_c:         data.hourly.temperature_2m?.[i],
+          wind_ms:        data.hourly.wind_speed_10m?.[i],
+          wind_dir:       data.hourly.wind_direction_10m?.[i],
+          precip_mm:      data.hourly.precipitation?.[i],
+          cape:           data.hourly.cape?.[i],
+          solar_rad_wm2:  data.hourly.shortwave_radiation?.[i],
+          uv_index:       data.hourly.uv_index?.[i],
+          lifted_index:   data.hourly.lifted_index?.[i],
+          soil_moisture:  data.hourly.soil_moisture_0_to_7cm?.[i],
+          cin:            data.hourly.convective_inhibition?.[i],
+          blh:            data.hourly.boundary_layer_height?.[i],
+        }
+      })() : null,
       dailyForecast: data.daily?.time?.map((t, i) => ({
         date:           t,
         high_c:         data.daily.temperature_2m_max?.[i],
@@ -76,12 +90,24 @@ export async function getAHPSFloodStage(gageId = 'MBLM6') {
       },
       timeout: 10000,
     })
+    let stage = null
+    if (typeof data === 'string') {
+      const stageMatch = data.match(/<observed>[\s\S]*?<datum>([\d.]+)<\/datum>/i)
+        || data.match(/<primary[^>]*>([\d.]+)<\/primary>/i)
+        || data.match(/<stage[^>]*>([\d.]+)<\/stage>/i)
+        || data.match(/<valid[^>]*>[\s\S]*?([\d.]+)\s*ft/i)
+      if (stageMatch) stage = parseFloat(stageMatch[1])
+      if (stage == null || isNaN(stage)) {
+        const numMatch = data.match(/([\d]+\.[\d]+)\s*(?:ft|feet)/i)
+        if (numMatch) stage = parseFloat(numMatch[1])
+      }
+    }
     return {
       available: true,
       product:   'NOAA AHPS Flood Stage',
       gageId,
+      stage:     isNaN(stage) ? null : stage,
       note:      'Flood-driven stormwater pulse modeling. Nonpoint source loading event trigger.',
-      rawXml:    typeof data === 'string' ? data.substring(0, 500) : null,
     }
   } catch(err) {
     return {

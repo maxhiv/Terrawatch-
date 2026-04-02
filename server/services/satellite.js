@@ -279,6 +279,37 @@ export async function getCopernicusDEMStatus() {
   }
 }
 
+export function extractSatelliteScalars(satStatus) {
+  if (!satStatus) return {}
+  const modis = satStatus.modis || {}
+  const viirs = satStatus.viirs || {}
+  const goes = satStatus.goes?.status || {}
+  return {
+    modis_chl_mean: modis.chlorophyll_mean ?? null,
+    modis_sst_mean: modis.sst_mean ?? null,
+    viirs_chl_mean: viirs.chlorophyll_mean ?? null,
+    goes_sst_erddap: goes.latestSST_C ?? null,
+  }
+}
+
+export function getPACEOCIScalars(paceData) {
+  if (!paceData?.configured) return {}
+  return {
+    pace_chl_mean: paceData.chlorophyll_mean ?? null,
+    pace_granules: paceData.granuleCount ?? null,
+    pace_hab_signal: paceData.hab_signal ?? null,
+  }
+}
+
+export function getSentinel1SARStatus() {
+  return {
+    available: true,
+    product: 'Sentinel-1 SAR',
+    access: 'via openEO (CropSAR_2D, MOGPR_S1)',
+    note: 'SAR cloud-penetrating imagery for gap-free time series',
+  }
+}
+
 export async function getAllSatelliteStatus() {
   const [modis, viirs, hls, landsat, s2, dem, goes] = await Promise.allSettled([
     getMODISChlorophyll(3),

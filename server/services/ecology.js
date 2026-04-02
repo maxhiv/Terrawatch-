@@ -252,6 +252,20 @@ export async function getAmeriFluxStatus() {
   }
 }
 
+export function extractEcologyScalars(ecoStatus) {
+  if (!ecoStatus) return {}
+  const inat = ecoStatus.iNaturalist || {}
+  const gbif = ecoStatus.gbif || {}
+  const ebird = ecoStatus.eBird || {}
+  return {
+    inat_observations: inat.totalResults ?? inat.count ?? null,
+    inat_species_count: inat.speciesCount ?? null,
+    gbif_occurrences: gbif.totalResults ?? gbif.count ?? null,
+    ebird_species: ebird.speciesCount ?? ebird.count ?? null,
+    ebird_checklists: ebird.checklistCount ?? null,
+  }
+}
+
 export async function getAllEcologyStatus() {
   const [inat, gbif, ebird, ameriflux] = await Promise.allSettled([
     getInaturalistObservations(null, 7),
