@@ -397,28 +397,47 @@ export function buildFeatureVector(data = {}) {
 export function autoLabel(features) {
   const labels = { hab: null, hypoxia: null }
 
-  if (features.wbDo2 != null || features.min_do2 != null) {
-    const minDo2 = Math.min(
-      features.wbDo2 ?? Infinity,
-      features.min_do2 ?? Infinity
-    )
+  const do2Candidates = [
+    features.wbDo2,
+    features.min_do2,
+    features.avg_do2,
+    features.do2_saturation_pct != null ? features.do2_saturation_pct * 0.14 : null,
+  ].filter(v => v != null)
+
+  if (do2Candidates.length > 0) {
+    const minDo2 = Math.min(...do2Candidates)
     if (minDo2 < THRESHOLDS.DO2_CRITICAL) {
       labels.hypoxia = 1
-    } else if (minDo2 > THRESHOLDS.DO2_LOW) {
+    } else if (minDo2 <= THRESHOLDS.DO2_LOW) {
+      labels.hypoxia = 1
+    } else {
       labels.hypoxia = 0
+    }
+  } else {
+    const waterTemp = features.buoy_water_temp_c ?? features.waterTemp_dauphinIs ?? features.goes_sst_mean
+    const oceanStress = features.goes_sst_gradient != null && features.goes_sst_gradient >= 3.5
+    if (waterTemp != null) {
+      if (waterTemp > 32 || (waterTemp > 28 && oceanStress)) labels.hypoxia = 1
+      else if (waterTemp < 15) labels.hypoxia = 0
     }
   }
 
-  if (features.avg_temp != null && features.wbSal != null) {
-    const warmWater  = features.avg_temp > THRESHOLDS.TEMP_WARM ? 1 : 0
-    const highSal    = features.wbSal != null && features.wbSal > 25 ? 1 : 0
-    const calmWind   = (features.nws_wind_speed_mph ?? features.wbWSpd ?? 10) < 5 ? 1 : 0
+  const temp = features.avg_temp ?? features.buoy_water_temp_c ?? features.goes_sst_mean
+  const sal = features.wbSal ?? features.salinity_dauphinIs
+
+  if (temp != null && sal != null) {
+    const warmWater  = temp > THRESHOLDS.TEMP_WARM ? 1 : 0
+    const highSal    = sal > 25 ? 1 : 0
+    const wind       = features.nws_wind_speed_mph ?? features.buoy_wind_speed_ms ?? features.coops_wind_speed ?? features.wbWSpd ?? 10
+    const calmWind   = wind < 5 ? 1 : 0
     const highChl    = features.wbChlFl != null && features.wbChlFl > 10 ? 1 : 0
     const summerFlag = features.is_summer
 
     const score = warmWater + highSal + calmWind + highChl + summerFlag
     if (score >= 3)      labels.hab = 1
     else if (score <= 1) labels.hab = 0
+  } else if (temp != null && !features.is_summer && temp < THRESHOLDS.TEMP_WARM) {
+    labels.hab = 0
   }
 
   return labels

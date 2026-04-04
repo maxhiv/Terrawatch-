@@ -422,6 +422,36 @@ export async function getOpenEOJob(jobId) {
   return row
 }
 
+export async function getUnlabeledVectors() {
+  const db = await getDB()
+  const stmt = db.prepare('SELECT id, ts, features FROM feature_vectors WHERE label_hab IS NULL AND label_hypoxia IS NULL')
+  const rows = []
+  while (stmt.step()) {
+    const r = stmt.getAsObject()
+    r.features = typeof r.features === 'string' ? JSON.parse(r.features) : r.features
+    rows.push(r)
+  }
+  stmt.free()
+  return rows
+}
+
+export async function updateVectorLabels(id, labelHab, labelHypoxia) {
+  const db = await getDB()
+  db.run('UPDATE feature_vectors SET label_hab = ?, label_hypoxia = ? WHERE id = ?', [labelHab, labelHypoxia, id])
+}
+
+export async function batchUpdateVectorLabels(updates) {
+  const db = await getDB()
+  const stmt = db.prepare('UPDATE feature_vectors SET label_hab = ?, label_hypoxia = ? WHERE id = ?')
+  for (const u of updates) {
+    stmt.bind([u.labelHab, u.labelHypoxia, u.id])
+    stmt.step()
+    stmt.reset()
+  }
+  stmt.free()
+  saveDB()
+}
+
 export async function getLatestVector() {
   const db = await getDB()
   const stmt = db.prepare('SELECT ts, features, label_hab, label_hypoxia FROM feature_vectors ORDER BY ts DESC LIMIT 1')

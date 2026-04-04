@@ -32,7 +32,7 @@ import { getAllEcologyStatus } from './services/ecology.js'
 import { getAllLandRegWeatherStatus } from './services/landregweather.js'
 import { getAllAirQualityStatus } from './services/airplus.js'
 import { persistTick } from './services/crossSensor.js'
-import { retrainHABOracle, runInference } from './services/mlTrainer.js'
+import { retrainHABOracle, runInference, backfillUnlabeledVectors } from './services/mlTrainer.js'
 import { getDBStats, saveDB, getLatestGOESReadings, writeSourceHealth, getLatestVector } from './services/database.js'
 import { getADPHClosures } from './services/adph.js'
 import { buildFeatureVector } from './services/crossSensor.js'
@@ -324,6 +324,7 @@ cron.schedule('*/10 * * * *', () => {
 
 setTimeout(async () => {
   try {
+    await backfillUnlabeledVectors()
     const stats = await getDBStats()
     const phase = stats.labeled >= 2000 ? 3 : stats.labeled >= 500 ? 2 : stats.labeled >= 100 ? 1 : 0
     console.log(`\n[Intelligence] DB: ${stats.readings} readings | ${stats.vectors} vectors | ${stats.labeled} labeled | Phase ${phase} | ${stats.dbSizeMB}MB`)

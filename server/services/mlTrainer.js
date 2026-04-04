@@ -1,9 +1,11 @@
 import {
   getLabeledVectors, getAllVectors, getDeployedModel,
-  writeModel, writeRetrainLog, getDBStats
+  writeModel, writeRetrainLog, getDBStats,
+  getUnlabeledVectors, batchUpdateVectorLabels
 } from './database.js'
 import { trainRandomForest, predictForest, evaluateForest } from '../ml/randomForest.js'
 import { computePermutationSHAP } from '../ml/shap.js'
+import { autoLabel } from './crossSensor.js'
 
 const PHASE_THRESHOLDS = {
   logistic:  100,
@@ -126,7 +128,45 @@ function evaluateModel(model, X, y) {
   return { accuracy: Math.round(accuracy * 1000) / 1000, aucRoc: Math.round(auc * 1000) / 1000 }
 }
 
+let backfillRunning = false
+
+export async function backfillUnlabeledVectors() {
+  if (backfillRunning) {
+    console.log('[MLTrainer] Backfill: already running, skipping')
+    return { backfilled: 0, total: 0, skipped: true }
+  }
+  backfillRunning = true
+  try {
+    const unlabeled = await getUnlabeledVectors()
+    if (unlabeled.length === 0) {
+      console.log('[MLTrainer] Backfill: no unlabeled vectors found')
+      return { backfilled: 0, total: 0 }
+    }
+
+    const updates = []
+    for (const vec of unlabeled) {
+      const labels = autoLabel(vec.features)
+      if (labels.hab != null || labels.hypoxia != null) {
+        updates.push({ id: vec.id, labelHab: labels.hab, labelHypoxia: labels.hypoxia })
+      }
+    }
+
+    if (updates.length > 0) {
+      await batchUpdateVectorLabels(updates)
+    }
+
+    console.log(`[MLTrainer] Backfill complete: ${updates.length}/${unlabeled.length} vectors labeled`)
+    return { backfilled: updates.length, total: unlabeled.length }
+  } catch (err) {
+    console.error('[MLTrainer] Backfill error:', err.message)
+    return { backfilled: 0, total: 0, error: err.message }
+  } finally {
+    backfillRunning = false
+  }
+}
+
 export async function retrainHABOracle() {
+  await backfillUnlabeledVectors()
   const stats = await getDBStats()
   const labeled = await getLabeledVectors(3000)
 
