@@ -1,0 +1,76 @@
+I need you to audit the live v2.2 codebase and return a structured fact sheet 
+for a partner-facing document. Please search the actual source files — 
+server/services/, server/routes/, client/src/, and any config or constants 
+files — and return the exact current values for every item below. 
+Do not estimate. If a value is not found, say "NOT FOUND" so I know to check manually.
+
+Return your answer as a numbered list matching this structure exactly:
+
+── PLATFORM ──
+1. Current platform version number
+2. Total active sensor feeds (the number reported in the live sensor registry)
+3. Total data sources configured (free federal + satellite sources)
+4. Cron pipeline frequency (how often buildFeatureVector() runs)
+5. HAB Oracle assessment cycle frequency (how often /api/hab/assess runs)
+6. Current deployment environment (Replit / Cloud Run / other)
+
+── HAB ORACLE ──
+7. Total planned sensor inputs to the HAB Oracle (the full input architecture)
+8. Number of inputs currently active / live
+9. Which specific inputs are currently offline or unavailable, and why
+10. Current Phase (0 / 1 / 2 / 3)
+11. Current weighted ensemble weights for each active feature (the actual weight values)
+12. Phase 1 trigger threshold (labeled sample count)
+13. Phase 1 model type and exact feature count used for training (is it 23 features or different?)
+14. Phase 2 trigger threshold and model type
+15. Phase 3 trigger threshold and model type
+16. Phase 3 target accuracy and forecast horizon
+17. CNN-LSTM architecture citation (Hill et al. year and DOI if hardcoded)
+
+── FEATURE VECTOR ──
+18. Total feature count in the assembled feature vector (buildFeatureVector output)
+19. How many of those features come from GOES-19
+20. Complete list of feature categories and field counts per category
+
+── HYPOXIA FORECASTER ──
+21. Current architecture name
+22. AUC-ROC benchmark figure and what dataset it was validated on
+23. Forecast horizon (days)
+24. DO₂ threshold for confirmed hypoxia label
+25. DO₂ threshold for stress label
+
+── WETLANDAI ──
+26. Architecture name (ResNet-50 U-Net or updated?)
+27. Classification accuracy figure
+28. Precision figure
+29. Validation dataset used
+30. Output resolution
+31. Number of output classes and their names
+
+── INTELLIGENCE ENGINE ──
+32. Current phase status
+33. Total labeled samples accumulated so far
+34. Total feature vectors accumulated
+35. Auto-label event types (list all 6 or however many)
+36. Retraining schedule (weekly cron timing)
+37. AUC-ROC promotion threshold (the delta required to auto-promote)
+
+── GOES-19 ──
+38. Number of GOES-19 product types ingested
+39. List all product types with their TERRAWATCH use
+40. GOES-19 refresh rate for SST
+41. SST gradient stratification alert threshold (the °C value)
+
+── EDUCATIONAL CURRICULUM ──
+42. Number of curriculum units (8 or updated?)
+43. List all unit titles in order
+
+── PLATFORM PAGES ──
+44. Complete list of all active routes / pages with their paths and titles
+
+── NEW IN V2.2 ──
+45. List every capability, feature, product, data source, or model that was 
+    added or changed between v2.0 and v2.2 that is not reflected in the 
+    v2.0 narrative document
+
+Return nothing else. Just the numbered answers.
