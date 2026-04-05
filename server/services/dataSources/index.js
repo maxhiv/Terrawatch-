@@ -187,9 +187,11 @@ export function computeHABRiskScore(flags, habOracleProb = null) {
 
   const seen = new Set()
   let dedupedCount = 0
-  for (const { flag } of flags) {
-    if (!seen.has(flag)) {
-      seen.add(flag)
+  for (const f of flags) {
+    const hourBucket = Math.floor(new Date(f.timestamp || Date.now()).getTime() / 3600000)
+    const key = `${f.flag}|${f.source_id || 'unknown'}|${hourBucket}`
+    if (!seen.has(key)) {
+      seen.add(key)
       dedupedCount++
     }
   }
