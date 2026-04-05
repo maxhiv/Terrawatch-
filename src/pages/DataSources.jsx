@@ -21,42 +21,91 @@ const CATEGORY_META = {
   HUMAN:       { label: 'Human Activity',        color: '#f59e0b', icon: '⊞' },
 }
 
+const GAUGE_BANDS = [
+  { max: 20, color: RISK_COLORS.MINIMAL, label: 'MINIMAL' },
+  { max: 40, color: RISK_COLORS.LOW,     label: 'LOW' },
+  { max: 60, color: RISK_COLORS.MODERATE, label: 'MODERATE' },
+  { max: 80, color: RISK_COLORS.HIGH,    label: 'HIGH' },
+  { max: 100, color: RISK_COLORS.CRITICAL, label: 'CRITICAL' },
+]
+
 function RiskGauge({ score, level }) {
   const color = RISK_COLORS[level] || '#94a3b8'
   const pct = Math.min(100, Math.max(0, score))
+  const arcLen = 251
   return (
     <div className="flex flex-col items-center">
-      <div className="relative" style={{ width: 200, height: 120 }}>
-        <svg width="200" height="120" viewBox="0 0 200 120">
-          <path d="M 20 100 A 80 80 0 0 1 180 100" fill="none" stroke="#e2e8f0" strokeWidth="16" strokeLinecap="round" />
+      <div className="relative" style={{ width: 220, height: 130 }}>
+        <svg width="220" height="130" viewBox="0 0 220 130">
+          {GAUGE_BANDS.map((band, i) => {
+            const start = (i === 0 ? 0 : GAUGE_BANDS[i - 1].max) / 100
+            const end = band.max / 100
+            const segLen = (end - start) * arcLen
+            const offset = start * arcLen
+            return (
+              <path key={i}
+                d="M 20 110 A 90 90 0 0 1 200 110"
+                fill="none"
+                stroke={band.color}
+                strokeWidth="10"
+                strokeLinecap="butt"
+                strokeDasharray={`${segLen} ${arcLen - segLen}`}
+                strokeDashoffset={-offset}
+                opacity={0.25}
+              />
+            )
+          })}
           <path
-            d="M 20 100 A 80 80 0 0 1 180 100"
+            d="M 20 110 A 90 90 0 0 1 200 110"
             fill="none"
             stroke={color}
-            strokeWidth="16"
+            strokeWidth="14"
             strokeLinecap="round"
-            strokeDasharray={`${(pct / 100) * 251} 251`}
+            strokeDasharray={`${(pct / 100) * arcLen} ${arcLen}`}
           />
-          <text x="100" y="85" textAnchor="middle" fill={color} fontSize="32" fontWeight="bold" fontFamily="JetBrains Mono, monospace">
+          <text x="110" y="95" textAnchor="middle" fill={color} fontSize="36" fontWeight="bold" fontFamily="JetBrains Mono, monospace">
             {score}
           </text>
-          <text x="100" y="112" textAnchor="middle" fill={color} fontSize="12" fontFamily="JetBrains Mono, monospace">
+          <text x="110" y="118" textAnchor="middle" fill={color} fontSize="12" fontFamily="JetBrains Mono, monospace">
             {level}
           </text>
+          <text x="20" y="126" textAnchor="middle" fill="#94a3b8" fontSize="8" fontFamily="JetBrains Mono">0</text>
+          <text x="200" y="126" textAnchor="middle" fill="#94a3b8" fontSize="8" fontFamily="JetBrains Mono">100</text>
         </svg>
       </div>
     </div>
   )
 }
 
-function SourceCard({ snapshot, onRefresh, onToggleHistory, isRefreshing }) {
+function MiniSparkline({ data, color = '#0ea5e9', width = 80, height = 24 }) {
+  if (!data?.length || data.length < 2) return null
+  const vals = data.map(d => (typeof d === 'number' ? d : d.v)).filter(v => v != null && Number.isFinite(v))
+  if (vals.length < 2) return null
+  const min = Math.min(...vals)
+  const max = Math.max(...vals)
+  const range = max - min || 1
+  const points = vals.map((v, i) => `${(i / (vals.length - 1)) * width},${height - ((v - min) / range) * (height - 2) - 1}`).join(' ')
+  return (
+    <svg width={width} height={height} className="flex-shrink-0">
+      <polyline points={points} fill="none" stroke={color} strokeWidth="1.5" strokeLinejoin="round" strokeLinecap="round" />
+    </svg>
+  )
+}
+
+function getSourceHealth(snapshot) {
+  if (snapshot.error) return { status: 'error', color: 'bg-red-500', badgeCls: 'bg-red-100 text-red-700', label: 'Error' }
+  if (!snapshot.timestamp) return { status: 'offline', color: 'bg-gray-400', badgeCls: 'bg-gray-100 text-gray-700', label: 'Offline' }
+  const ageMs = Date.now() - new Date(snapshot.timestamp).getTime()
+  const pollMs = (snapshot.poll_interval_min || 15) * 60 * 1000
+  if (ageMs > pollMs * 3) return { status: 'offline', color: 'bg-gray-400', badgeCls: 'bg-gray-100 text-gray-700', label: 'Offline' }
+  return { status: 'online', color: 'bg-emerald-500', badgeCls: 'bg-emerald-100 text-emerald-700', label: 'Online' }
+}
+
+function SourceCard({ snapshot, onRefresh, onToggleHistory, isRefreshing, sparkData }) {
   const catMeta = CATEGORY_META[snapshot.category] || { label: snapshot.category, color: '#6b7280', icon: '?' }
-  const hasError = !!snapshot.error
   const flags = Array.isArray(snapshot.flags) ? snapshot.flags : []
   const age = snapshot.timestamp ? timeAgo(new Date(snapshot.timestamp).getTime()) : null
-
-  const statusColor = hasError ? 'bg-red-500' : 'bg-emerald-500'
-  const statusLabel = hasError ? 'Error' : 'Online'
+  const health = getSourceHealth(snapshot)
 
   const keyReadings = extractKeyReadings(snapshot)
 
@@ -64,17 +113,15 @@ function SourceCard({ snapshot, onRefresh, onToggleHistory, isRefreshing }) {
     <div className="tw-card hover:shadow-md transition-shadow">
       <div className="flex items-start justify-between mb-2">
         <div className="flex items-center gap-2">
-          <div className={clsx('w-2.5 h-2.5 rounded-full flex-shrink-0', statusColor, !hasError && 'animate-pulse')} />
+          <div className={clsx('w-2.5 h-2.5 rounded-full flex-shrink-0', health.color, health.status === 'online' && 'animate-pulse')} />
           <div>
             <div className="text-sm font-semibold text-bay-800">{snapshot.label}</div>
             <div className="tw-mono text-[9px] text-bay-300">{snapshot.source_id}</div>
           </div>
         </div>
         <div className="flex items-center gap-1.5">
-          <span className={clsx('tw-mono text-[8px] px-1.5 py-0.5 rounded font-bold',
-            hasError ? 'bg-red-100 text-red-700' : 'bg-emerald-100 text-emerald-700'
-          )}>
-            {statusLabel}
+          <span className={clsx('tw-mono text-[8px] px-1.5 py-0.5 rounded font-bold', health.badgeCls)}>
+            {health.label}
           </span>
           <button onClick={onRefresh} disabled={isRefreshing} className="tw-mono text-[9px] px-1.5 py-0.5 rounded bg-bay-50 text-bay-500 hover:bg-bay-100 transition-colors disabled:opacity-50" title="Refresh">
             {isRefreshing ? <Spinner size={10} /> : '↺'}
@@ -82,22 +129,25 @@ function SourceCard({ snapshot, onRefresh, onToggleHistory, isRefreshing }) {
         </div>
       </div>
 
-      <div className="flex items-center gap-3 mb-2 text-[10px] text-bay-400">
+      <div className="flex items-center gap-3 mb-2 text-[10px] text-bay-400 flex-wrap">
         <span style={{ color: catMeta.color }} className="font-semibold">{catMeta.icon} {catMeta.label}</span>
+        {snapshot.provider && <span className="text-bay-500">{snapshot.provider}</span>}
+        {snapshot.poll_interval_min && <span>⟳ {snapshot.poll_interval_min}min</span>}
         {age && <span>Updated {age}</span>}
         {snapshot.elapsed_ms != null && <span>{snapshot.elapsed_ms}ms</span>}
       </div>
 
-      {keyReadings.length > 0 && (
-        <div className="flex flex-wrap gap-2 mb-2">
-          {keyReadings.map((r, i) => (
+      <div className="flex items-center justify-between mb-2">
+        <div className="flex flex-wrap gap-2 flex-1">
+          {keyReadings.length > 0 && keyReadings.map((r, i) => (
             <div key={i} className="tw-mono text-xs px-1.5 py-0.5 rounded bg-bay-50 text-bay-700">
               <span className="text-bay-400 text-[9px]">{r.label}:</span> <span className="font-bold">{r.value}</span>
               {r.unit && <span className="text-bay-300 text-[9px] ml-0.5">{r.unit}</span>}
             </div>
           ))}
         </div>
-      )}
+        <MiniSparkline data={sparkData} color={catMeta.color} />
+      </div>
 
       {flags.length > 0 && (
         <div className="flex flex-wrap gap-1 mb-2">
@@ -115,7 +165,7 @@ function SourceCard({ snapshot, onRefresh, onToggleHistory, isRefreshing }) {
         </div>
       )}
 
-      {hasError && (
+      {snapshot.error && (
         <div className="tw-mono text-[9px] text-red-600 bg-red-50 rounded p-1.5 mb-2 truncate">
           {snapshot.error}
         </div>
@@ -220,6 +270,7 @@ export default function DataSources() {
   const [loading, setLoading] = useState(true)
   const [expandedSource, setExpandedSource] = useState(null)
   const [refreshing, setRefreshing] = useState(null)
+  const [sparkHistory, setSparkHistory] = useState({})
   const eventSourceRef = useRef(null)
 
   const fetchData = useCallback(async () => {
@@ -229,10 +280,27 @@ export default function DataSources() {
         fetch(`${API}/latest`).then(r => r.json()),
         fetch(`${API}/risk/score`).then(r => r.json()),
       ])
-      setRegistry(regRes.sources || [])
+      const sources = regRes.sources || []
+      setRegistry(sources)
       setSnapshots(latestRes.snapshots || [])
       setRiskFlags(latestRes.active_flags || [])
       setRiskScore(riskRes)
+      for (const src of sources) {
+        fetch(`${API}/${src.id}/history?hours=6`)
+          .then(r => r.json())
+          .then(d => {
+            const hist = d.history || []
+            const vals = hist.map(h => {
+              const nums = extractNumericFromSnapshot(h)
+              const first = Object.values(nums)[0]
+              return first
+            }).filter(v => v != null && Number.isFinite(v))
+            if (vals.length >= 2) {
+              setSparkHistory(prev => ({ ...prev, [src.id]: vals.reverse() }))
+            }
+          })
+          .catch(() => {})
+      }
     } catch (err) {
       console.error('[DataSources] Fetch error:', err)
     } finally {
@@ -317,6 +385,9 @@ export default function DataSources() {
   const snapshotMap = {}
   for (const s of snapshots) snapshotMap[s.source_id] = s
 
+  const regMap = {}
+  for (const r of registry) regMap[r.id] = r
+
   const grouped = {}
   for (const source of registry) {
     const snap = snapshotMap[source.id]
@@ -325,12 +396,16 @@ export default function DataSources() {
     grouped[cat].push({
       ...source,
       source_id: source.id,
+      provider: source.provider,
+      poll_interval_min: source.poll_interval_min,
       ...(snap || {}),
     })
   }
 
-  const onlineCount = snapshots.filter(s => !s.error).length
-  const offlineCount = snapshots.filter(s => s.error).length
+  const allMerged = Object.values(grouped).flat()
+  const onlineCount = allMerged.filter(s => getSourceHealth(s).status === 'online').length
+  const offlineCount = allMerged.filter(s => getSourceHealth(s).status === 'offline').length
+  const errorCount = allMerged.filter(s => getSourceHealth(s).status === 'error').length
   const totalFlags = riskFlags.length
 
   return (
@@ -363,21 +438,27 @@ export default function DataSources() {
 
             <div className="tw-card">
               <div className="tw-label text-teal-600 mb-3">Source Status</div>
-              <div className="grid grid-cols-2 gap-3">
-                <div className="text-center p-3 rounded-lg bg-emerald-50">
-                  <div className="tw-mono text-2xl font-bold text-emerald-700">{onlineCount}</div>
+              <div className="grid grid-cols-3 gap-2 mb-3">
+                <div className="text-center p-2.5 rounded-lg bg-emerald-50">
+                  <div className="tw-mono text-xl font-bold text-emerald-700">{onlineCount}</div>
                   <div className="text-[10px] text-emerald-600">Online</div>
                 </div>
-                <div className="text-center p-3 rounded-lg bg-red-50">
-                  <div className="tw-mono text-2xl font-bold text-red-700">{offlineCount}</div>
+                <div className="text-center p-2.5 rounded-lg bg-gray-50">
+                  <div className="tw-mono text-xl font-bold text-gray-500">{offlineCount}</div>
+                  <div className="text-[10px] text-gray-500">Offline</div>
+                </div>
+                <div className="text-center p-2.5 rounded-lg bg-red-50">
+                  <div className="tw-mono text-xl font-bold text-red-700">{errorCount}</div>
                   <div className="text-[10px] text-red-600">Error</div>
                 </div>
-                <div className="text-center p-3 rounded-lg bg-amber-50">
-                  <div className="tw-mono text-2xl font-bold text-amber-700">{totalFlags}</div>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <div className="text-center p-2.5 rounded-lg bg-amber-50">
+                  <div className="tw-mono text-xl font-bold text-amber-700">{totalFlags}</div>
                   <div className="text-[10px] text-amber-600">Flags</div>
                 </div>
-                <div className="text-center p-3 rounded-lg bg-blue-50">
-                  <div className="tw-mono text-2xl font-bold text-blue-700">{registry.length}</div>
+                <div className="text-center p-2.5 rounded-lg bg-blue-50">
+                  <div className="tw-mono text-xl font-bold text-blue-700">{registry.length}</div>
                   <div className="text-[10px] text-blue-600">Sources</div>
                 </div>
               </div>
@@ -408,6 +489,7 @@ export default function DataSources() {
                       key={s.source_id}
                       snapshot={s}
                       isRefreshing={refreshing === s.source_id}
+                      sparkData={sparkHistory[s.source_id]}
                       onRefresh={() => handleRefresh(s.source_id)}
                       onToggleHistory={() => setExpandedSource(expandedSource === s.source_id ? null : s.source_id)}
                     />
