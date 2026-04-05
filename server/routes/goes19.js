@@ -21,12 +21,65 @@ function verifyGoesKey(req, res, next) {
 
 function isNum(v) { return typeof v === 'number' && isFinite(v) }
 
-router.post('/ingest', verifyGoesKey, async (req, res) => {
-  const payload = req.body
+function normalizePayload(raw) {
+  const products = raw.payload?.products || raw
+  const scan_timestamp = raw.scan_timestamp || raw.payload?.scan_timestamp || raw.payload?.timestamp || new Date().toISOString()
 
-  if (!payload || !payload.scan_timestamp) {
-    return res.status(400).json({ error: 'Missing scan_timestamp' })
+  const sst = products.sst ? {
+    mean_c:      products.sst.mean_c      ?? products.sst.bay_mean_c   ?? null,
+    gradient_c:  products.sst.gradient_c  ?? null,
+    pixel_count: products.sst.pixel_count ?? products.sst.pixels_valid ?? null,
+    min_c:       products.sst.bay_min_c   ?? null,
+    max_c:       products.sst.bay_max_c   ?? null,
+    offshore_c:  products.sst.offshore_c  ?? null,
+  } : null
+
+  const qpe = products.qpe ? {
+    rainfall_mm:  products.qpe.rainfall_mm    ?? products.qpe.bay_rain_mm_hr      ?? null,
+    accum_6h_mm:  products.qpe.accum_6h_mm    ?? products.qpe.cumulative_6h_mm    ?? null,
+    accum_24h_mm: products.qpe.accum_24h_mm   ?? products.qpe.cumulative_24h_mm   ?? null,
+    accum_48h_mm: products.qpe.cumulative_48h_mm ?? null,
+  } : null
+
+  const cloud_mask = products.cloud_mask ? {
+    coverage_pct: products.cloud_mask.coverage_pct ?? products.cloud_mask.bay_cloud_pct ?? null,
+    clear_pct:    products.cloud_mask.bay_clear_pct ?? null,
+  } : null
+
+  const glm = products.glm ? {
+    flash_count:      products.glm.flash_count      ?? products.glm.flashes_5min ?? null,
+    lightning_active: products.glm.lightning_active  ?? (isNum(products.glm.flashes_5min) ? products.glm.flashes_5min > 0 : null),
+    active_cells:     products.glm.active_cells     ?? null,
+  } : null
+
+  const winds = products.amv_winds || products.winds || null
+  const amv_winds = winds ? {
+    speed_ms:      winds.speed_ms      ?? null,
+    direction_deg: winds.direction_deg ?? null,
+    amv_count:     winds.amv_count     ?? null,
+  } : null
+
+  const rgbSrc = products.rgb_ratios || products.rgb || null
+  const rgb_ratios = rgbSrc ? {
+    bloom_index:   rgbSrc.bloom_index    ?? null,
+    turbidity_idx: rgbSrc.turbidity_idx  ?? rgbSrc.turbidity_index ?? null,
+    green_band:    rgbSrc.green_band_mean ?? null,
+    red_band:      rgbSrc.red_band_mean   ?? null,
+  } : null
+
+  const cdmo = products.cdmo || null
+
+  return { scan_timestamp, sst, qpe, cloud_mask, glm, amv_winds, rgb_ratios, cdmo }
+}
+
+router.post('/ingest', verifyGoesKey, async (req, res) => {
+  const raw = req.body
+
+  if (!raw) {
+    return res.status(400).json({ error: 'Empty body' })
   }
+
+  const payload = normalizePayload(raw)
 
   const tsMs = Date.parse(payload.scan_timestamp)
   if (isNaN(tsMs)) {
@@ -34,7 +87,7 @@ router.post('/ingest', verifyGoesKey, async (req, res) => {
   }
 
   try {
-    const { sst, qpe, cloud_mask, rgb_ratios, glm, amv_winds } = payload
+    const { sst, qpe, cloud_mask, rgb_ratios, glm, amv_winds, cdmo } = payload
 
     const ts = tsMs
     const src = 'GOES19-PUSH'
@@ -49,6 +102,7 @@ router.post('/ingest', verifyGoesKey, async (req, res) => {
       if (isNum(sst.mean_c)) rows.push([ts, src, station, 'sst_mean', sst.mean_c, '°C', MOBILE_BAY_LAT, MOBILE_BAY_LON])
       if (isNum(sst.gradient_c)) rows.push([ts, src, station, 'sst_gradient', sst.gradient_c, '°C', MOBILE_BAY_LAT, MOBILE_BAY_LON])
       if (isNum(sst.pixel_count)) rows.push([ts, src, station, 'sst_pixels', sst.pixel_count, 'count', MOBILE_BAY_LAT, MOBILE_BAY_LON])
+      if (isNum(sst.offshore_c)) rows.push([ts, src, station, 'sst_offshore', sst.offshore_c, '°C', MOBILE_BAY_LAT, MOBILE_BAY_LON])
     }
 
     if (qpe) {
@@ -58,6 +112,7 @@ router.post('/ingest', verifyGoesKey, async (req, res) => {
       if (isNum(qpe.rainfall_mm)) rows.push([ts, src, station, 'qpe_rainfall', qpe.rainfall_mm, 'mm', MOBILE_BAY_LAT, MOBILE_BAY_LON])
       if (isNum(qpe.accum_6h_mm)) rows.push([ts, src, station, 'qpe_6h', qpe.accum_6h_mm, 'mm', MOBILE_BAY_LAT, MOBILE_BAY_LON])
       if (isNum(qpe.accum_24h_mm)) rows.push([ts, src, station, 'qpe_24h', qpe.accum_24h_mm, 'mm', MOBILE_BAY_LAT, MOBILE_BAY_LON])
+      if (isNum(qpe.accum_48h_mm)) rows.push([ts, src, station, 'qpe_48h', qpe.accum_48h_mm, 'mm', MOBILE_BAY_LAT, MOBILE_BAY_LON])
     }
 
     if (cloud_mask && cloud_mask.coverage_pct != null) {
@@ -82,6 +137,15 @@ router.post('/ingest', verifyGoesKey, async (req, res) => {
       rows.push([ts, src, station, 'rgb_ratios', JSON.stringify(rgb_ratios), 'json', MOBILE_BAY_LAT, MOBILE_BAY_LON])
     }
 
+    if (cdmo) {
+      if (isNum(cdmo.do_mgl)) rows.push([ts, src, 'NERRS-PUSH', 'do_mgl', cdmo.do_mgl, 'mg/L', MOBILE_BAY_LAT, MOBILE_BAY_LON])
+      if (isNum(cdmo.temp_c)) rows.push([ts, src, 'NERRS-PUSH', 'water_temp', cdmo.temp_c, '°C', MOBILE_BAY_LAT, MOBILE_BAY_LON])
+      if (isNum(cdmo.salinity)) rows.push([ts, src, 'NERRS-PUSH', 'salinity', cdmo.salinity, 'ppt', MOBILE_BAY_LAT, MOBILE_BAY_LON])
+      if (isNum(cdmo.ph)) rows.push([ts, src, 'NERRS-PUSH', 'ph', cdmo.ph, '', MOBILE_BAY_LAT, MOBILE_BAY_LON])
+      if (isNum(cdmo.turbidity)) rows.push([ts, src, 'NERRS-PUSH', 'turbidity', cdmo.turbidity, 'NTU', MOBILE_BAY_LAT, MOBILE_BAY_LON])
+      if (isNum(cdmo.depth_m)) rows.push([ts, src, 'NERRS-PUSH', 'depth', cdmo.depth_m, 'm', MOBILE_BAY_LAT, MOBILE_BAY_LON])
+    }
+
     if (errors.length > 0) {
       return res.status(400).json({ error: 'Validation failed', details: errors })
     }
@@ -91,9 +155,9 @@ router.post('/ingest', verifyGoesKey, async (req, res) => {
     }
 
     const isoTs = new Date(tsMs).toISOString()
-    latestScan = { scan_timestamp: isoTs, received_at: new Date().toISOString(), payload, readings_written: rows.length }
+    latestScan = { scan_timestamp: isoTs, received_at: new Date().toISOString(), payload: raw, readings_written: rows.length }
 
-    console.log(`[GOES19] Ingested scan ${isoTs} — ${rows.length} readings written`)
+    console.log(`[GOES19] Ingested scan ${isoTs} — ${rows.length} readings written (sst:${sst?.mean_c ?? '-'} qpe:${qpe?.rainfall_mm ?? '-'} cloud:${cloud_mask?.coverage_pct ?? '-'} bloom:${rgb_ratios?.bloom_index ?? '-'} glm:${glm?.flash_count ?? '-'} winds:${amv_winds?.speed_ms ?? '-'} cdmo:${cdmo ? 'yes' : 'no'})`)
 
     res.json({
       status: 'ok',
