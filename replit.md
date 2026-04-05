@@ -20,8 +20,9 @@ Planetary Environmental Intelligence Platform — Mobile Bay & Gulf Coast
 
 - **Fast cron (3min)**: USGS, CO-OPS, NERRS, HF Radar, AirNow, GOES-19 DB lookup, NDBC Buoy 42012, NWS Weather
 - **Slow cron (15min)**: Satellite (NASA CMR), Ocean models (HYCOM/CMEMS), Ecology (iNaturalist/GBIF/eBird), Land/Weather (Open-Meteo/AHPS), Air Quality (EPA AQS/OpenAQ/PurpleAir)
+- **Data Source Poller**: EventEmitter-based per-source polling — USGS Extended (15min), NOAA PORTS (6min), NWS Point Forecast (60min), ERDDAP Ocean Color (720min), EPA ECHO (1440min), GCOOS Buoys (30min), HAB Bulletin (360min), AIS Vessel Traffic (15min), USACE Dredge (1440min)
 - **Nightly cron (8AM)**: ML retrain (Random Forest + SHAP explainability)
-- **ML feature vector**: 142 features from 15+ live data sources per tick
+- **ML feature vector**: 152 features from 24+ live data sources per tick (10 new: erddap_chl_mean, erddap_chl_p90, erddap_sst_mean, hab_bulletin_events_nearby, epa_echo_exceedances, upstream_total_flow_kcfs_extended, vessel_count_in_bay, dredge_active_flag, gcoos_water_temp_offshore, nws_precip_chance_24h)
 - **HAB Oracle v2.2**: 11-factor weighted ensemble (6 legacy + 4 GOES-19 factors + PAR bloom growth risk)
 - **Hypoxia Forecast**: Halocline-based stratification model with Jubilee detection conditions
 - **Alert Engine**: evaluateAndDispatchAlerts() — hypoxia, stratification, bloom, compound stress, flood, air quality
@@ -82,7 +83,10 @@ terrawatch/
 │   │   ├── flood.js            # /api/flood/status (compound flood risk)
 │   │   ├── beach.js            # /api/beach/status (swim safety + ADPH closures)
 │   │   ├── climate.js          # /api/climate/status (vulnerability index)
-│   │   └── pollution.js        # /api/pollution/status (pollution index)
+│   │   ├── pollution.js        # /api/pollution/status (pollution index)
+│   │   └── dataSources.js     # /api/datasources/* (9-source registry, latest, risk, SSE stream, refresh)
+│   ├── jobs/
+│   │   └── dataSourcePoller.js # EventEmitter-based per-source polling with configurable intervals
 │   ├── services/
 │   │   ├── usgs.js             # USGS NWIS water data (6 stations, gage_height, orthophosphate, total_nitrogen)
 │   │   ├── noaa.js             # NOAA CO-OPS, NWS, NDBC
@@ -93,9 +97,18 @@ terrawatch/
 │   │   ├── epa.js              # EPA ECHO/WQP/AirNow/TRI
 │   │   ├── openeo.js           # Copernicus Algorithm Plaza (8 algorithms)
 │   │   ├── adph.js             # Alabama Dept Public Health shellfish closures
-│   │   ├── database.js         # SQLite persistence (sql.js, writeSourceHealth, getSourceHealthSummary)
-│   │   ├── crossSensor.js      # Cross-sensor feature assembly (142 keys) + corrected autoLabel (K. brevis ecology: warm+salty+calm+highChl+summer)
+│   │   ├── database.js         # SQLite persistence (sql.js, snapshot storage, risk flag events)
+│   │   ├── crossSensor.js      # Cross-sensor feature assembly (152 keys) + corrected autoLabel (K. brevis ecology + ERDDAP chl + GCOOS temp fallbacks)
 │   │   ├── mlTrainer.js        # ML training pipeline (Phase 1-3, Random Forest, SHAP, exportVectorsCSV)
+│   │   ├── dataSources/        # 9 new live data source fetcher modules
+│   │   │   ├── index.js        # Master registry, fetchAllSources, computeHABRiskScore
+│   │   │   ├── usgsGauges.js   # USGS NWIS extended gauge network (5 watershed stations)
+│   │   │   ├── noaaPorts.js    # NOAA PORTS bay-wide (Dauphin Is, Dog River, Coden)
+│   │   │   ├── nwsForecast.js  # NWS 48h hourly + 7-day forecast (3 grid points)
+│   │   │   ├── erddapOceanColor.js # MODIS+VIIRS chl-a + SST from CoastWatch ERDDAP
+│   │   │   ├── epaEcho.js      # EPA ECHO NPDES nutrient loading
+│   │   │   ├── gulfCoast.js    # GCOOS/NDBC buoys + NOAA HAB Bulletin
+│   │   │   └── vesselTraffic.js # AIS vessel traffic + USACE dredge notices
 │   │   ├── satellite.js        # MODIS, VIIRS, HLS, Landsat, Sentinel-2, Copernicus DEM
 │   │   ├── ocean.js            # CMEMS, HYCOM, CoastWatch, StreamStats, Digital Coast
 │   │   ├── ecology.js          # iNaturalist, GBIF, eBird, AmeriFlux

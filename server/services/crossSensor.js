@@ -68,6 +68,7 @@ export function buildFeatureVector(data = {}) {
     recentVectors,
     wqpDO2,
     nerrsSecondary,
+    extSources,
   } = data
   const usgs = waterQuality?.usgs || []
   const coops = waterQuality?.coops || {}
@@ -391,7 +392,76 @@ export function buildFeatureVector(data = {}) {
     hour_cos:     Math.cos(2 * Math.PI * hourOfDay / 24),
     doy_sin:      Math.sin(2 * Math.PI * dayOfYear / 365),
     doy_cos:      Math.cos(2 * Math.PI * dayOfYear / 365),
+    ...extractExtSourceFeatures(extSources, safeN),
   }
+}
+
+function extractExtSourceFeatures(extSources, safeN) {
+  const f = {}
+  if (!extSources) return f
+
+  const erddap = extSources.erddap_ocean_color?.data
+  if (Array.isArray(erddap)) {
+    const chlDs = erddap.find(d => d.variable === 'chlorophyll' || d.variable === 'chla')
+    if (chlDs?.stats) {
+      f.erddap_chl_mean = safeN(chlDs.stats.mean)
+      f.erddap_chl_p90  = safeN(chlDs.stats.p90)
+    }
+    const sstDs = erddap.find(d => d.variable === 'sst')
+    if (sstDs?.stats) {
+      f.erddap_sst_mean = safeN(sstDs.stats.mean)
+    }
+  }
+
+  const hab = extSources.noaa_hab_bulletin?.data
+  if (hab?.bulletin) {
+    f.hab_bulletin_events_nearby = hab.bulletin.near_mobile_bay ?? 0
+  }
+
+  const epa = extSources.epa_echo?.data
+  if (epa) {
+    f.epa_echo_exceedances = epa.exceedances?.length ?? epa.facility_count ?? 0
+  }
+
+  const usgsExt = extSources.usgs_gauges?.data
+  if (Array.isArray(usgsExt)) {
+    const totalFlow = usgsExt.reduce((sum, g) => {
+      const flow = g.readings?.streamflow?.value
+      return sum + (flow ?? 0)
+    }, 0)
+    f.upstream_total_flow_kcfs_extended = totalFlow / 1000
+  }
+
+  const ais = extSources.ais_vessels?.data
+  if (ais) {
+    f.vessel_count_in_bay = ais.vessel_count ?? (Array.isArray(ais.vessels) ? ais.vessels.length : 0)
+    f.dredge_active_flag  = (ais.active_dredges?.length > 0 || ais.flags?.includes?.('DREDGE_ACTIVE')) ? 1 : 0
+  }
+
+  const dredge = extSources.usace_dredge?.data
+  if (dredge) {
+    if (f.dredge_active_flag == null || f.dredge_active_flag === 0) {
+      f.dredge_active_flag = dredge.active_dredge_ops > 0 ? 1 : 0
+    }
+  }
+
+  const gcoos = extSources.gcoos_buoys?.data
+  if (Array.isArray(gcoos)) {
+    const temps = gcoos
+      .map(b => b.readings?.water_temp?.value)
+      .filter(v => v != null)
+    if (temps.length) {
+      f.gcoos_water_temp_offshore = temps.reduce((a, b) => a + b, 0) / temps.length
+    }
+  }
+
+  const nws = extSources.nws_forecast?.data
+  if (Array.isArray(nws)) {
+    const maxPrecip = Math.max(0, ...nws.map(p => p.max_precip_chance_24h ?? 0))
+    f.nws_precip_chance_24h = maxPrecip
+  }
+
+  return f
 }
 
 export function autoLabel(features) {
@@ -414,7 +484,7 @@ export function autoLabel(features) {
       labels.hypoxia = 0
     }
   } else {
-    const waterTemp = features.buoy_water_temp_c ?? features.waterTemp_dauphinIs ?? features.goes_sst_mean
+    const waterTemp = features.buoy_water_temp_c ?? features.waterTemp_dauphinIs ?? features.goes_sst_mean ?? features.gcoos_water_temp_offshore ?? features.erddap_sst_mean
     const oceanStress = features.goes_sst_gradient != null && features.goes_sst_gradient >= 3.5
     if (waterTemp != null) {
       if (waterTemp > 32 || (waterTemp > 28 && oceanStress)) labels.hypoxia = 1
@@ -422,7 +492,7 @@ export function autoLabel(features) {
     }
   }
 
-  const temp = features.avg_temp ?? features.buoy_water_temp_c ?? features.goes_sst_mean
+  const temp = features.avg_temp ?? features.buoy_water_temp_c ?? features.goes_sst_mean ?? features.gcoos_water_temp_offshore ?? features.erddap_sst_mean
   const sal = features.wbSal ?? features.salinity_dauphinIs
 
   if (temp != null && sal != null) {
@@ -430,10 +500,12 @@ export function autoLabel(features) {
     const highSal    = sal > 25 ? 1 : 0
     const wind       = features.nws_wind_speed_mph ?? features.buoy_wind_speed_ms ?? features.coops_wind_speed ?? features.wbWSpd ?? 10
     const calmWind   = wind < 5 ? 1 : 0
-    const highChl    = features.wbChlFl != null && features.wbChlFl > 10 ? 1 : 0
+    const chlVal     = features.wbChlFl ?? features.erddap_chl_mean
+    const highChl    = chlVal != null && chlVal > 10 ? 1 : 0
     const summerFlag = features.is_summer
+    const habNearby  = (features.hab_bulletin_events_nearby ?? 0) > 0 ? 1 : 0
 
-    const score = warmWater + highSal + calmWind + highChl + summerFlag
+    const score = warmWater + highSal + calmWind + highChl + summerFlag + habNearby
     if (score >= 3)      labels.hab = 1
     else if (score <= 1) labels.hab = 0
   } else if (temp != null && !features.is_summer && temp < THRESHOLDS.TEMP_WARM) {

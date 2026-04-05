@@ -20,6 +20,8 @@ import floodRoutes from './routes/flood.js'
 import beachRoutes from './routes/beach.js'
 import climateRoutes from './routes/climate.js'
 import pollutionRoutes from './routes/pollution.js'
+import dataSourcesRouter from './routes/dataSources.js'
+import { startPoller } from './jobs/dataSourcePoller.js'
 
 import { getRealtimeData as getUSGSData } from './services/usgs.js'
 import { getAllCoopsConditions as getNOAAData, getBuoyData, getMobileWeather } from './services/noaa.js'
@@ -33,7 +35,7 @@ import { getAllLandRegWeatherStatus } from './services/landregweather.js'
 import { getAllAirQualityStatus } from './services/airplus.js'
 import { persistTick } from './services/crossSensor.js'
 import { retrainHABOracle, runInference, backfillUnlabeledVectors } from './services/mlTrainer.js'
-import { getDBStats, saveDB, getLatestGOESReadings, writeSourceHealth, getLatestVector } from './services/database.js'
+import { getDBStats, saveDB, getLatestGOESReadings, writeSourceHealth, getLatestVector, getLatestSnapshots } from './services/database.js'
 import { getADPHClosures } from './services/adph.js'
 import { buildFeatureVector } from './services/crossSensor.js'
 
@@ -61,6 +63,7 @@ app.use('/api/flood', floodRoutes)
 app.use('/api/beach', beachRoutes)
 app.use('/api/climate', climateRoutes)
 app.use('/api/pollution', pollutionRoutes)
+app.use('/api/datasources', dataSourcesRouter)
 
 app.get('/api/health', async (req, res) => {
   let dbStats = null
@@ -78,7 +81,7 @@ app.get('/api/health', async (req, res) => {
       labeled:     dbStats?.labeled     || 0,
       phase3Ready: dbStats?.phase3Ready || false,
     },
-    featureVectorSize: 142,
+    featureVectorSize: 152,
     dataSources: {
       fast: {
         usgs:        (_latestData.waterQuality?.usgs?.length  || 0) > 0,
@@ -212,6 +215,17 @@ cron.schedule('*/3 * * * *', async () => {
       weather:    weather.status    === 'fulfilled' ? (weather.value    ?? null) : _latestData.weather,
     }
 
+    try {
+      const extSnapshots = await getLatestSnapshots()
+      const extSources = {}
+      for (const s of extSnapshots) {
+        extSources[s.source_id] = s
+      }
+      _latestData.extSources = extSources
+    } catch (extErr) {
+      console.warn('[CRON:3m] Extended sources unavailable:', extErr.message)
+    }
+
     const result = await persistTick(_latestData)
 
     if (result.ok) {
@@ -337,6 +351,7 @@ setTimeout(async () => {
 }, 3000)
 
 app.listen(PORT, () => {
+  startPoller()
   console.log(`
 ╔══════════════════════════════════════════════════════════╗
 ║  TERRAWATCH v2.2 — Full-Stack Intelligence Platform      ║
@@ -346,7 +361,9 @@ app.listen(PORT, () => {
 ║  CRON 20min → Satellite · Ocean · Ecology · AirPlus      ║
 ║  CRON 6hr   → Land-Reg · AHPS · NCEI · SSURGO · FEMA    ║
 ║  CRON daily → Nightly ML retrain (8 AM)                   ║
-║  ML vector  → 142 features from 15+ live data sources    ║
+║  Poller     → 9 new sources (USGS+ · PORTS · NWS ·       ║
+║               ERDDAP · EPA · GCOOS · HAB · AIS · USACE)  ║
+║  ML vector  → 152 features from 24+ live data sources    ║
 ║  Phase 1+2 active — Logistic + Random Forest + SHAP      ║
 ║  Phase 3 pre-wired — Vertex AI CNN-LSTM on threshold     ║
 ║  Products   → Flood · Beach · Climate · Pollution        ║

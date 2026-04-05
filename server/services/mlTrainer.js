@@ -54,6 +54,10 @@ const FEATURE_KEYS = [
   'compound_stress_index',
   'month','is_summer','is_night',
   'hour_sin','hour_cos','doy_sin','doy_cos',
+  'erddap_chl_mean','erddap_chl_p90','erddap_sst_mean',
+  'hab_bulletin_events_nearby','epa_echo_exceedances',
+  'upstream_total_flow_kcfs_extended','vessel_count_in_bay',
+  'dredge_active_flag','gcoos_water_temp_offshore','nws_precip_chance_24h',
 ]
 
 const FEATURE_DEFAULTS = {}

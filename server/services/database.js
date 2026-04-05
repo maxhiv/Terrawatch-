@@ -108,6 +108,29 @@ const SCHEMA = `
     meta        TEXT
   );
   CREATE INDEX IF NOT EXISTS idx_oej_status ON openeo_jobs(status);
+
+  CREATE TABLE IF NOT EXISTS data_source_snapshots (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    source_id   TEXT NOT NULL,
+    label       TEXT,
+    category    TEXT,
+    timestamp   TEXT NOT NULL,
+    elapsed_ms  INTEGER,
+    data        TEXT,
+    flags       TEXT
+  );
+  CREATE INDEX IF NOT EXISTS idx_dss_src_ts ON data_source_snapshots(source_id, timestamp DESC);
+  CREATE INDEX IF NOT EXISTS idx_dss_ts ON data_source_snapshots(timestamp DESC);
+
+  CREATE TABLE IF NOT EXISTS risk_flag_events (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    source_id   TEXT NOT NULL,
+    flag        TEXT NOT NULL,
+    context     TEXT,
+    timestamp   TEXT NOT NULL
+  );
+  CREATE INDEX IF NOT EXISTS idx_rfe_ts ON risk_flag_events(timestamp DESC);
+  CREATE INDEX IF NOT EXISTS idx_rfe_src ON risk_flag_events(source_id, timestamp DESC);
 `
 
 export async function getDB() {
@@ -469,6 +492,131 @@ export async function getRecentVectors(limit = 50) {
   while (stmt.step()) {
     const r = stmt.getAsObject()
     r.features = typeof r.features === 'string' ? JSON.parse(r.features) : r.features
+    rows.push(r)
+  }
+  stmt.free()
+  return rows
+}
+
+export async function saveSnapshot(snapshot) {
+  const db = await getDB()
+  db.run(
+    `INSERT INTO data_source_snapshots (source_id, label, category, timestamp, elapsed_ms, data, flags)
+     VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    [
+      snapshot.source_id,
+      snapshot.label,
+      snapshot.category,
+      snapshot.timestamp,
+      snapshot.elapsed_ms,
+      JSON.stringify(snapshot.data),
+      JSON.stringify(snapshot.flags),
+    ]
+  )
+
+  const pruneStmt = db.prepare(
+    `DELETE FROM data_source_snapshots WHERE source_id = ? AND id NOT IN (
+       SELECT id FROM data_source_snapshots WHERE source_id = ? ORDER BY timestamp DESC LIMIT 200
+     )`
+  )
+  pruneStmt.run([snapshot.source_id, snapshot.source_id])
+  pruneStmt.free()
+  saveDB()
+}
+
+export async function getLatestSnapshots() {
+  const db = await getDB()
+  const stmt = db.prepare(
+    `SELECT d1.source_id, d1.label, d1.category, d1.timestamp, d1.elapsed_ms, d1.data, d1.flags
+     FROM data_source_snapshots d1
+     INNER JOIN (
+       SELECT source_id, MAX(timestamp) as max_ts FROM data_source_snapshots GROUP BY source_id
+     ) d2 ON d1.source_id = d2.source_id AND d1.timestamp = d2.max_ts`
+  )
+  const rows = []
+  while (stmt.step()) {
+    const r = stmt.getAsObject()
+    try { r.data = JSON.parse(r.data) } catch {}
+    try { r.flags = JSON.parse(r.flags) } catch {}
+    rows.push(r)
+  }
+  stmt.free()
+  return rows
+}
+
+export async function getLatestSnapshotForSource(sourceId) {
+  const db = await getDB()
+  const stmt = db.prepare(
+    `SELECT source_id, label, category, timestamp, elapsed_ms, data, flags
+     FROM data_source_snapshots WHERE source_id = ? ORDER BY timestamp DESC LIMIT 1`
+  )
+  stmt.bind([sourceId])
+  const row = stmt.step() ? stmt.getAsObject() : null
+  stmt.free()
+  if (row) {
+    try { row.data = JSON.parse(row.data) } catch {}
+    try { row.flags = JSON.parse(row.flags) } catch {}
+  }
+  return row
+}
+
+export async function getSnapshotHistory(sourceId, hours = 24) {
+  const db = await getDB()
+  const cutoff = new Date(Date.now() - hours * 3600000).toISOString()
+  const stmt = db.prepare(
+    `SELECT source_id, timestamp, elapsed_ms, data, flags
+     FROM data_source_snapshots WHERE source_id = ? AND timestamp > ? ORDER BY timestamp DESC`
+  )
+  stmt.bind([sourceId, cutoff])
+  const rows = []
+  while (stmt.step()) {
+    const r = stmt.getAsObject()
+    try { r.data = JSON.parse(r.data) } catch {}
+    try { r.flags = JSON.parse(r.flags) } catch {}
+    rows.push(r)
+  }
+  stmt.free()
+  return rows
+}
+
+export async function saveRiskFlags(flags) {
+  const db = await getDB()
+  const stmt = db.prepare(
+    `INSERT INTO risk_flag_events (source_id, flag, context, timestamp) VALUES (?, ?, ?, ?)`
+  )
+  for (const f of flags) {
+    stmt.run([f.source_id, f.flag, f.context ?? null, f.timestamp])
+  }
+  stmt.free()
+  saveDB()
+}
+
+export async function getRecentRiskFlags(hours = 24) {
+  const db = await getDB()
+  const cutoff = new Date(Date.now() - hours * 3600000).toISOString()
+  const stmt = db.prepare(
+    `SELECT source_id, flag, context, timestamp FROM risk_flag_events
+     WHERE timestamp > ? ORDER BY timestamp DESC LIMIT 200`
+  )
+  stmt.bind([cutoff])
+  const rows = []
+  while (stmt.step()) rows.push(stmt.getAsObject())
+  stmt.free()
+  return rows
+}
+
+export async function getHABRiskHistory(hours = 72) {
+  const db = await getDB()
+  const cutoff = new Date(Date.now() - hours * 3600000).toISOString()
+  const stmt = db.prepare(
+    `SELECT timestamp, flags FROM data_source_snapshots
+     WHERE timestamp > ? ORDER BY timestamp ASC`
+  )
+  stmt.bind([cutoff])
+  const rows = []
+  while (stmt.step()) {
+    const r = stmt.getAsObject()
+    try { r.flags = JSON.parse(r.flags) } catch {}
     rows.push(r)
   }
   stmt.free()

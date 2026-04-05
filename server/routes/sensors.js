@@ -81,6 +81,16 @@ function buildSensorRegistry() {
     { id:'wbe_mawss',    name:'Wastewater Epid. (WBE)', type:'public_health', status:'planned_year2', feeds:1, cost:'partnership',auth:'none', worldFirst:true },
     { id:'osprey',       name:'Osprey (Litter Gitter)', type:'microplastic',  status:'partnership',   feeds:1, cost:'partnership',auth:'none', worldFirst:true },
     { id:'vexcel',       name:'Vexcel Data Program',    type:'aerial_imagery',status:vexcelKey ? 'active' : 'evaluation', feeds:7, cost:'paid_800mo', auth:'VEXCEL_API_KEY' },
+
+    { id:'usgs_extended',   name:'USGS Extended Gauges',       type:'upstream_hydro',  status:'active', feeds:5,  cost:'free', auth:'none' },
+    { id:'noaa_ports_mb',   name:'NOAA PORTS Mobile Bay',      type:'in_bay_obs',      status:'active', feeds:3,  cost:'free', auth:'none' },
+    { id:'noaa_nws_point',  name:'NWS Point Forecast (48h)',   type:'atmospheric',     status:'active', feeds:3,  cost:'free', auth:'none' },
+    { id:'erddap_oc',       name:'NOAA CoastWatch ERDDAP',     type:'satellite',       status:'active', feeds:3,  cost:'free', auth:'none' },
+    { id:'epa_echo_npdes',  name:'EPA ECHO NPDES Loading',     type:'nutrient_loading',status:'active', feeds:1,  cost:'free', auth:'none' },
+    { id:'gcoos_ndbc',      name:'GCOOS / NDBC Offshore Buoys',type:'offshore',        status:'active', feeds:4,  cost:'free', auth:'none' },
+    { id:'noaa_habsos',     name:'NOAA HAB Bulletin (Gulf)',    type:'hab_alert',       status:'active', feeds:1,  cost:'free', auth:'none' },
+    { id:'ais_traffic',     name:'AIS Vessel Traffic',          type:'human_activity',  status:hasEnv('AISHUB_USERNAME') ? 'active' : 'key_required', feeds:1, cost:'free', auth:'AISHUB_USERNAME' },
+    { id:'usace_dredge',    name:'USACE Dredge Operations',    type:'human_activity',  status:'active', feeds:1,  cost:'free', auth:'none' },
   ]
 }
 
@@ -106,6 +116,7 @@ router.get('/registry', (req,res) => {
       { key:'AMERIFLUX_TOKEN',     desc:'AmeriFlux CO₂/CH₄ flux tower data',              register:'ameriflux.lbl.gov/data/register-data-usage', required:false },
       { key:'ANTHROPIC_API_KEY',   desc:'AI Field Assistant (Claude)',                     register:'console.anthropic.com',   required:false },
       { key:'VEXCEL_API_KEY',      desc:'7.5cm aerial imagery + DTM',                     register:'vexceldata.com/contact',  required:false },
+      { key:'AISHUB_USERNAME',     desc:'AIS vessel traffic in Mobile Bay',              register:'aishub.net/join',         required:false },
     ],
     timestamp:new Date().toISOString(),
   })
