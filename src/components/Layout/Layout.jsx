@@ -5,7 +5,7 @@ import {
   LayoutDashboard, FlaskConical, Waves, Droplets, Satellite,
   Microscope, Brain, Radio, Activity, TreePine, Database,
   Bell, Bot, Cpu, Sparkles, Map as MapIcon, BarChart3,
-  CloudRain, Umbrella, Thermometer, Factory
+  CloudRain, Umbrella, Thermometer, Factory, Radar
 } from 'lucide-react'
 
 const NAV = [
@@ -22,9 +22,10 @@ const NAV = [
   { path: '/climate', label: 'Climate Vulnerability', Icon: Thermometer, badge: 'NEW' },
   { path: '/pollution', label: 'Pollution Tracker', Icon: Factory, badge: 'NEW' },
   null,
+  { path: '/data-sources', label: 'Data Sources', Icon: Radar, badge: '9 LIVE' },
   { path: '/sensors', label: 'Sensor Registry', Icon: Radio },
   { path: '/feeds', label: 'Feed Status', Icon: Activity },
-  { path: '/data-stream', label: 'DataStream', Icon: BarChart3, badge: '142 KEYS' },
+  { path: '/data-stream', label: 'DataStream', Icon: BarChart3, badge: '152 KEYS' },
   null,
   { path: '/wetlandai', label: 'WetlandAI', Icon: TreePine, badge: 'WORLD FIRST' },
   { path: '/sitevault', label: 'SITEVAULT', Icon: Database },

@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useStore } from '../store/index.js'
 import { StatCard, PageHeader, RiskBadge, Spinner, Section, EmptyState, AlertBanner, SkeletonCard } from '../components/Common/index.jsx'
@@ -26,6 +26,8 @@ export default function Dashboard() {
 
   const isLoading = Object.values(loading).some(Boolean)
 
+  const [dsStatus, setDsStatus] = useState(null)
+
   useEffect(() => {
     fetchNERRS()
     fetchHFRadar()
@@ -40,6 +42,15 @@ export default function Dashboard() {
     fetchClimate()
     fetchPollution()
     fetchInference()
+    fetch('/api/datasources/latest').then(r => r.json()).then(d => {
+      const snaps = d.snapshots || []
+      const online = snaps.filter(s => !s.error).length
+      const flags = (d.active_flags || []).length
+      setDsStatus({ total: snaps.length, online, flags })
+    }).catch(() => {})
+    fetch('/api/datasources/risk/score').then(r => r.json()).then(d => {
+      setDsStatus(prev => prev ? { ...prev, habScore: d.score, habLevel: d.level } : { habScore: d.score, habLevel: d.level })
+    }).catch(() => {})
   }, [])
 
   const habProb = habAssessment?.hab?.probability
@@ -176,7 +187,7 @@ export default function Dashboard() {
           <StatCard label="PM2.5" value={pm25 != null ? pm25.toFixed(1) : '—'} unit="µg/m³" color={pm25 > 35 ? '#dc2626' : pm25 > 12 ? '#f59e0b' : '#10b981'} icon="🌫️" sub={pm25Source} alert={pm25 > 35} freshness={lastFetchedAt.sensors} />
           <StatCard label="Biodiversity" value={inatCount ?? '—'} unit="obs" color="#16a34a" icon="🦎" sub="iNaturalist 7-day" freshness={lastFetchedAt.sensors} />
           <StatCard label="Active Feeds" value={totalSensors || '—'} color="#0a9e80" icon="⊞" sub={`${sensors?.summary?.totalActiveFeeds || '—'} total feeds`} freshness={lastFetchedAt.sensors} />
-          <StatCard label="Feature Vector" value="142" unit="keys" color="#7c3aed" icon="⊡" sub="ML input features" freshness={lastFetchedAt.sensors} />
+          <StatCard label="Feature Vector" value="152" unit="keys" color="#7c3aed" icon="⊡" sub="ML input features" freshness={lastFetchedAt.sensors} />
         </div>
       </Section>
 
@@ -259,6 +270,39 @@ export default function Dashboard() {
           </div>
         )}
       </Section>
+
+      {dsStatus && (
+        <Link to="/data-sources" className="block no-underline mb-4">
+          <div className="tw-card tw-glass-tint-green hover:shadow-md transition-shadow" style={{ borderLeft: '3px solid #0ea5e9' }}>
+            <div className="flex items-center justify-between mb-2">
+              <div className="tw-label text-blue-600">External Data Sources — 9 Live Integrations</div>
+              <span className="tw-mono text-[8px] px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 font-bold">VIEW ALL →</span>
+            </div>
+            <div className="flex flex-wrap gap-4 items-center">
+              <div className="flex items-center gap-2">
+                <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                <span className="tw-mono text-xs font-bold text-emerald-700">{dsStatus.online || 0}/{dsStatus.total || 0} Online</span>
+              </div>
+              {dsStatus.habScore != null && (
+                <div className="flex items-center gap-2">
+                  <span className="tw-mono text-xs text-bay-500">HAB Risk:</span>
+                  <span className={clsx('tw-mono text-xs font-bold',
+                    dsStatus.habScore >= 60 ? 'text-red-600' : dsStatus.habScore >= 30 ? 'text-amber-600' : 'text-emerald-600'
+                  )}>{dsStatus.habScore}/100 {dsStatus.habLevel}</span>
+                </div>
+              )}
+              {dsStatus.flags > 0 && (
+                <div className="flex items-center gap-2">
+                  <span className="tw-mono text-[10px] px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 font-bold">
+                    {dsStatus.flags} FLAGS
+                  </span>
+                </div>
+              )}
+              <span className="tw-mono text-[10px] text-bay-400">USGS · NOAA · NWS · ERDDAP · EPA · GCOOS · HAB · AIS · USACE</span>
+            </div>
+          </div>
+        </Link>
+      )}
 
       {(nerrs?.waterQuality?.available || hfradar?.available || aqi?.available) && (
         <div className="tw-card mb-4 tw-glass-tint-green">

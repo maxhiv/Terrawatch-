@@ -39,14 +39,15 @@ Planetary Environmental Intelligence Platform — Mobile Bay & Gulf Coast
 ```
 terrawatch/
 ├── src/                        # React frontend
-│   ├── pages/                  # 20 page components
-│   │   ├── Dashboard.jsx       # Main environmental dashboard (GOES alert strip, UV/gust/PM2.5 cards)
+│   ├── pages/                  # 21 page components
+│   │   ├── Dashboard.jsx       # Main environmental dashboard (GOES alert strip, UV/gust/PM2.5 cards, data sources widget)
 │   │   ├── HabOracle.jsx       # HAB prediction (World First™)
 │   │   ├── HypoxiaForecast.jsx # Hypoxia risk forecasting with Jubilee detection
 │   │   ├── WaterQuality.jsx    # Interactive water quality map
 │   │   ├── SensorsRegistry.jsx # Data feed registry
 │   │   ├── CompoundFlood.jsx   # Compound flood intelligence (AHPS + GOES QPE + USGS flow)
 │   │   ├── BeachSafety.jsx     # Beach safety (swim index, ADPH closures, UV, currents)
+│   │   ├── DataSources.jsx      # 9 external data sources — HAB risk gauge, source cards, SSE live updates, 72h history
 │   │   ├── ClimateVulnerability.jsx # Climate vulnerability index (SST, DO₂, heat index)
 │   │   ├── PollutionTracker.jsx # Pollution tracker (AQI, PM2.5, turbidity, nutrients)
 │   │   ├── WetlandAI.jsx       # Wetland pre-delineation
