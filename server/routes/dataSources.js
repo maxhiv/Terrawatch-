@@ -62,7 +62,7 @@ router.get('/latest', async (req, res) => {
       timestamp:       new Date().toISOString(),
       snapshots,
       active_flags:    dedupFlags(flags),
-      hab_risk_score:  computeHABRiskScore(flags.map(f => ({ flag: f.flag })), habProb),
+      hab_risk_score:  computeHABRiskScore(flags, habProb),
     })
   } catch (err) {
     res.status(500).json({ error: err.message })
@@ -74,7 +74,7 @@ router.get('/risk/score', async (req, res) => {
     const flags   = await getRecentRiskFlags(6)
     const history = await getHABRiskHistory(72)
     const habProb = await getHABOracleProb()
-    const score   = computeHABRiskScore(flags.map(f => ({ flag: f.flag })), habProb)
+    const score   = computeHABRiskScore(flags, habProb)
 
     res.json({
       score,

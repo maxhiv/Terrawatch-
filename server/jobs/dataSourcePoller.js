@@ -115,7 +115,7 @@ async function emitFullSnapshot() {
       snapshot_time:   new Date().toISOString(),
       sources_fetched: snapshots.length,
       risk_flags:      flags,
-      hab_risk_score:  computeHABRiskScore(flags.map(f => ({ flag: f.flag })), habProb),
+      hab_risk_score:  computeHABRiskScore(flags, habProb),
       data:            Object.fromEntries(snapshots.map(s => [s.source_id, s])),
     })
   } catch (err) {
