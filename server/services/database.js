@@ -588,6 +588,10 @@ export async function saveRiskFlags(flags) {
     stmt.run([f.source_id, f.flag, f.context ?? null, f.timestamp])
   }
   stmt.free()
+
+  const cutoff = new Date(Date.now() - 7 * 24 * 3600000).toISOString()
+  db.run(`DELETE FROM risk_flag_events WHERE timestamp < ?`, [cutoff])
+
   saveDB()
 }
 
