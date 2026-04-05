@@ -82,15 +82,15 @@ function buildSensorRegistry() {
     { id:'osprey',       name:'Osprey (Litter Gitter)', type:'microplastic',  status:'partnership',   feeds:1, cost:'partnership',auth:'none', worldFirst:true },
     { id:'vexcel',       name:'Vexcel Data Program',    type:'aerial_imagery',status:vexcelKey ? 'active' : 'evaluation', feeds:7, cost:'paid_800mo', auth:'VEXCEL_API_KEY' },
 
-    { id:'usgs_extended',   name:'USGS Extended Gauges',       type:'upstream_hydro',  status:'active', feeds:5,  cost:'free', auth:'none' },
-    { id:'noaa_ports_mb',   name:'NOAA PORTS Mobile Bay',      type:'in_bay_obs',      status:'active', feeds:3,  cost:'free', auth:'none' },
-    { id:'noaa_nws_point',  name:'NWS Point Forecast (48h)',   type:'atmospheric',     status:'active', feeds:3,  cost:'free', auth:'none' },
-    { id:'erddap_oc',       name:'NOAA CoastWatch ERDDAP',     type:'satellite',       status:'active', feeds:3,  cost:'free', auth:'none' },
-    { id:'epa_echo_npdes',  name:'EPA ECHO NPDES Loading',     type:'nutrient_loading',status:'active', feeds:1,  cost:'free', auth:'none' },
-    { id:'gcoos_ndbc',      name:'GCOOS / NDBC Offshore Buoys',type:'offshore',        status:'active', feeds:4,  cost:'free', auth:'none' },
-    { id:'noaa_habsos',     name:'NOAA HAB Bulletin (Gulf)',    type:'hab_alert',       status:'active', feeds:1,  cost:'free', auth:'none' },
-    { id:'ais_traffic',     name:'AIS Vessel Traffic',          type:'human_activity',  status:hasEnv('AISHUB_USERNAME') ? 'active' : 'key_required', feeds:1, cost:'free', auth:'AISHUB_USERNAME' },
-    { id:'usace_dredge',    name:'USACE Dredge Operations',    type:'human_activity',  status:'active', feeds:1,  cost:'free', auth:'none' },
+    { id:'usgs_gauges',         name:'USGS Extended Gauges',       type:'upstream_hydro',  status:'active', feeds:5,  cost:'free', auth:'none' },
+    { id:'noaa_ports',          name:'NOAA PORTS Mobile Bay',      type:'in_bay_obs',      status:'active', feeds:3,  cost:'free', auth:'none' },
+    { id:'nws_forecast',        name:'NWS Point Forecast (48h)',   type:'atmospheric',     status:'active', feeds:3,  cost:'free', auth:'none' },
+    { id:'erddap_ocean_color',  name:'NOAA CoastWatch ERDDAP',     type:'satellite',       status:'active', feeds:3,  cost:'free', auth:'none' },
+    { id:'epa_echo',            name:'EPA ECHO NPDES Loading',     type:'nutrient_loading',status:'active', feeds:1,  cost:'free', auth:'none' },
+    { id:'gcoos_buoys',         name:'GCOOS / NDBC Offshore Buoys',type:'offshore',        status:'active', feeds:4,  cost:'free', auth:'none' },
+    { id:'noaa_hab_bulletin',   name:'NOAA HAB Bulletin (Gulf)',    type:'hab_alert',       status:'active', feeds:1,  cost:'free', auth:'none' },
+    { id:'ais_vessels',         name:'AIS Vessel Traffic',          type:'human_activity',  status:hasEnv('AISHUB_USERNAME') ? 'active' : 'key_required', feeds:1, cost:'free', auth:'AISHUB_USERNAME' },
+    { id:'usace_dredge',        name:'USACE Dredge Operations',    type:'human_activity',  status:'active', feeds:1,  cost:'free', auth:'none' },
   ]
 }
 

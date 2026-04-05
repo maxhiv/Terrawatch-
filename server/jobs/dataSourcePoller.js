@@ -58,19 +58,15 @@ async function runSourceFetch(source) {
       flags:       extractFlags(data),
     }
 
-    saveSnapshot(snapshot).catch(e =>
-      console.error(`[Poller] DB save error (${source.id}):`, e.message)
-    )
+    await saveSnapshot(snapshot)
 
     if (snapshot.flags.length > 0) {
-      saveRiskFlags(snapshot.flags.map(f => ({
+      await saveRiskFlags(snapshot.flags.map(f => ({
         source_id:  source.id,
         flag:       f.flag,
         context:    f.context ?? null,
         timestamp:  snapshot.timestamp,
-      }))).catch(e =>
-        console.error(`[Poller] Risk flag save error (${source.id}):`, e.message)
-      )
+      })))
     }
 
     pollerEvents.emit('source_update', snapshot)
