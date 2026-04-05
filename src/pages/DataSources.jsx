@@ -331,6 +331,23 @@ export default function DataSources() {
       } catch {}
     })
 
+    es.addEventListener('source_error', (e) => {
+      try {
+        const err = JSON.parse(e.data)
+        if (err.source_id) {
+          setSnapshots(prev => {
+            const idx = prev.findIndex(s => s.source_id === err.source_id)
+            if (idx >= 0) {
+              const updated = [...prev]
+              updated[idx] = { ...updated[idx], error: err.error || 'Unknown error', timestamp: new Date().toISOString() }
+              return updated
+            }
+            return [...prev, { source_id: err.source_id, error: err.error || 'Unknown error', timestamp: new Date().toISOString() }]
+          })
+        }
+      } catch {}
+    })
+
     es.addEventListener('flags_raised', (e) => {
       try {
         const ev = JSON.parse(e.data)
@@ -348,9 +365,11 @@ export default function DataSources() {
       try {
         const snap = JSON.parse(e.data)
         if (snap.hab_risk_score != null) {
+          const s = snap.hab_risk_score
+          const lvl = s >= 75 ? 'CRITICAL' : s >= 50 ? 'HIGH' : s >= 25 ? 'MODERATE' : s >= 10 ? 'LOW' : 'MINIMAL'
           setRiskScore(prev => prev
-            ? { ...prev, score: snap.hab_risk_score }
-            : { score: snap.hab_risk_score, level: snap.hab_risk_score >= 75 ? 'CRITICAL' : snap.hab_risk_score >= 50 ? 'HIGH' : snap.hab_risk_score >= 25 ? 'MODERATE' : 'LOW' }
+            ? { ...prev, score: s, level: lvl }
+            : { score: s, level: lvl }
           )
         }
       } catch {}

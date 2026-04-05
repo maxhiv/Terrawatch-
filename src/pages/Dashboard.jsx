@@ -46,19 +46,21 @@ export default function Dashboard() {
       fetch('/api/datasources').then(r => r.json()),
       fetch('/api/datasources/latest').then(r => r.json()),
     ]).then(([regRes, latestRes]) => {
+      const sources = regRes.sources || []
       const snaps = latestRes.snapshots || []
-      const regMap = {}
-      for (const r of (regRes.sources || [])) regMap[r.id] = r
+      const snapMap = {}
+      for (const s of snaps) snapMap[s.source_id] = s
       let online = 0, offline = 0, errors = 0
-      for (const s of snaps) {
+      for (const src of sources) {
+        const s = snapMap[src.id]
+        if (!s || !s.timestamp) { offline++; continue }
         if (s.error) { errors++; continue }
-        if (!s.timestamp) { offline++; continue }
         const ageMs = Date.now() - new Date(s.timestamp).getTime()
-        const pollMs = ((regMap[s.source_id]?.poll_interval_min) || 15) * 60 * 1000
+        const pollMs = (src.poll_interval_min || 15) * 60 * 1000
         if (ageMs > pollMs * 3) { offline++ } else { online++ }
       }
       const flags = (latestRes.active_flags || []).length
-      setDsStatus({ total: snaps.length, online, offline, errors, flags })
+      setDsStatus({ total: sources.length, online, offline, errors, flags })
     }).catch(() => {})
     fetch('/api/datasources/risk/score').then(r => r.json()).then(d => {
       setDsStatus(prev => prev ? { ...prev, habScore: d.score, habLevel: d.level } : { habScore: d.score, habLevel: d.level })
