@@ -94,10 +94,10 @@ function MiniSparkline({ data, color = '#0ea5e9', width = 80, height = 24 }) {
 
 function getSourceHealth(snapshot) {
   if (snapshot.error) return { status: 'error', color: 'bg-red-500', badgeCls: 'bg-red-100 text-red-700', label: 'Error' }
-  if (!snapshot.timestamp) return { status: 'offline', color: 'bg-gray-400', badgeCls: 'bg-gray-100 text-gray-700', label: 'Offline' }
+  if (!snapshot.timestamp) return { status: 'offline', color: 'bg-amber-400', badgeCls: 'bg-amber-100 text-amber-700', label: 'Offline' }
   const ageMs = Date.now() - new Date(snapshot.timestamp).getTime()
   const pollMs = (snapshot.poll_interval_min || 15) * 60 * 1000
-  if (ageMs > pollMs * 3) return { status: 'offline', color: 'bg-gray-400', badgeCls: 'bg-gray-100 text-gray-700', label: 'Offline' }
+  if (ageMs > pollMs * 3) return { status: 'offline', color: 'bg-amber-400', badgeCls: 'bg-amber-100 text-amber-700', label: 'Offline' }
   return { status: 'online', color: 'bg-emerald-500', badgeCls: 'bg-emerald-100 text-emerald-700', label: 'Online' }
 }
 
@@ -498,6 +498,22 @@ export default function DataSources() {
               </Section>
             )
           })}
+          {Object.entries(grouped).filter(([cat]) => !CATEGORY_META[cat]).map(([cat, sources]) => (
+            <Section key={cat} title={`? ${cat}`}>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                {sources.map(s => (
+                  <SourceCard
+                    key={s.source_id}
+                    snapshot={s}
+                    isRefreshing={refreshing === s.source_id}
+                    sparkData={sparkHistory[s.source_id]}
+                    onRefresh={() => handleRefresh(s.source_id)}
+                    onToggleHistory={() => setExpandedSource(expandedSource === s.source_id ? null : s.source_id)}
+                  />
+                ))}
+              </div>
+            </Section>
+          ))}
         </>
       )}
     </div>

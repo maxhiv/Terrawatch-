@@ -42,11 +42,23 @@ export default function Dashboard() {
     fetchClimate()
     fetchPollution()
     fetchInference()
-    fetch('/api/datasources/latest').then(r => r.json()).then(d => {
-      const snaps = d.snapshots || []
-      const online = snaps.filter(s => !s.error).length
-      const flags = (d.active_flags || []).length
-      setDsStatus({ total: snaps.length, online, flags })
+    Promise.all([
+      fetch('/api/datasources').then(r => r.json()),
+      fetch('/api/datasources/latest').then(r => r.json()),
+    ]).then(([regRes, latestRes]) => {
+      const snaps = latestRes.snapshots || []
+      const regMap = {}
+      for (const r of (regRes.sources || [])) regMap[r.id] = r
+      let online = 0, offline = 0, errors = 0
+      for (const s of snaps) {
+        if (s.error) { errors++; continue }
+        if (!s.timestamp) { offline++; continue }
+        const ageMs = Date.now() - new Date(s.timestamp).getTime()
+        const pollMs = ((regMap[s.source_id]?.poll_interval_min) || 15) * 60 * 1000
+        if (ageMs > pollMs * 3) { offline++ } else { online++ }
+      }
+      const flags = (latestRes.active_flags || []).length
+      setDsStatus({ total: snaps.length, online, offline, errors, flags })
     }).catch(() => {})
     fetch('/api/datasources/risk/score').then(r => r.json()).then(d => {
       setDsStatus(prev => prev ? { ...prev, habScore: d.score, habLevel: d.level } : { habScore: d.score, habLevel: d.level })
