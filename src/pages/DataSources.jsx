@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import clsx from 'clsx'
 import { PageHeader, Spinner, Section } from '../components/Common/index.jsx'
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
@@ -271,9 +271,10 @@ export default function DataSources() {
   const [expandedSource, setExpandedSource] = useState(null)
   const [refreshing, setRefreshing] = useState(null)
   const [sparkHistory, setSparkHistory] = useState({})
-  const eventSourceRef = useRef(null)
+  const [sseConnected, setSseConnected] = useState(false)
 
-  const fetchData = useCallback(async () => {
+  const fetchData = useCallback(async (isRefresh = false) => {
+    if (isRefresh) setLoading(true)
     try {
       const [regRes, latestRes, riskRes] = await Promise.all([
         fetch(API).then(r => r.json()),
@@ -314,7 +315,8 @@ export default function DataSources() {
 
   useEffect(() => {
     const es = new EventSource(`${API}/stream`)
-    eventSourceRef.current = es
+    es.onopen = () => setSseConnected(true)
+    es.onerror = () => setSseConnected(false)
 
     es.addEventListener('source_update', (e) => {
       try {
@@ -435,9 +437,16 @@ export default function DataSources() {
         subtitle={`9 live sources · ${onlineCount} online · ${totalFlags} active flags`}
         badge="LIVE"
         actions={
-          <button onClick={fetchData} disabled={loading} className="tw-btn-primary disabled:opacity-50">
-            {loading ? <Spinner size={14} /> : '↺'} Refresh All
-          </button>
+          <div className="flex items-center gap-2">
+            <span className={clsx('tw-mono text-[8px] px-1.5 py-0.5 rounded font-bold',
+              sseConnected ? 'bg-emerald-100 text-emerald-700' : 'bg-gray-100 text-gray-500'
+            )}>
+              SSE {sseConnected ? 'LIVE' : 'CONNECTING'}
+            </span>
+            <button onClick={() => fetchData(true)} disabled={loading} className="tw-btn-primary disabled:opacity-50">
+              {loading ? <Spinner size={14} /> : '↺'} Refresh All
+            </button>
+          </div>
         }
       />
 
