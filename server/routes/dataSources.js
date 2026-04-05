@@ -8,6 +8,32 @@ import {
   getRecentRiskFlags,
   getHABRiskHistory,
 } from '../services/database.js'
+let cachedHABProb = null
+let cachedHABProbTime = 0
+const HAB_PROB_TTL = 3 * 60 * 1000
+
+async function getHABOracleProb() {
+  const now = Date.now()
+  if (cachedHABProb !== null && (now - cachedHABProbTime) < HAB_PROB_TTL) {
+    return cachedHABProb
+  }
+  try {
+    const port = process.env.PORT || 3001
+    const res = await fetch(`http://localhost:${port}/api/hab/assess`)
+    if (!res.ok) return null
+    const data = await res.json()
+    const prob = data?.hab?.probability
+    if (prob !== null && prob !== undefined && Number.isFinite(prob)) {
+      cachedHABProb = prob
+      cachedHABProbTime = now
+      return prob
+    }
+    return null
+  } catch (err) {
+    console.warn('[DataSources] HAB Oracle prob fetch failed:', err.message)
+    return null
+  }
+}
 
 const router = express.Router()
 
@@ -30,12 +56,13 @@ router.get('/latest', async (req, res) => {
   try {
     const snapshots = await getLatestSnapshots()
     const flags     = await getRecentRiskFlags(6)
+    const habProb   = await getHABOracleProb()
 
     res.json({
       timestamp:       new Date().toISOString(),
       snapshots,
-      active_flags:    flags,
-      hab_risk_score:  computeHABRiskScore(flags.map(f => ({ flag: f.flag }))),
+      active_flags:    dedupFlags(flags),
+      hab_risk_score:  computeHABRiskScore(flags.map(f => ({ flag: f.flag })), habProb),
     })
   } catch (err) {
     res.status(500).json({ error: err.message })
@@ -46,12 +73,13 @@ router.get('/risk/score', async (req, res) => {
   try {
     const flags   = await getRecentRiskFlags(6)
     const history = await getHABRiskHistory(72)
-    const score   = computeHABRiskScore(flags.map(f => ({ flag: f.flag })))
+    const habProb = await getHABOracleProb()
+    const score   = computeHABRiskScore(flags.map(f => ({ flag: f.flag })), habProb)
 
     res.json({
       score,
       level:   riskLevel(score),
-      flags:   flags.slice(0, 30),
+      flags:   dedupFlags(flags).slice(0, 30),
       history,
       updated: new Date().toISOString(),
     })
@@ -143,12 +171,22 @@ router.post('/:id/refresh', async (req, res) => {
   }
 })
 
+function dedupFlags(flags) {
+  const seen = new Set()
+  return flags.filter(f => {
+    const ts = new Date(f.timestamp).getTime()
+    const key = `${f.flag}|${f.source_id}|${Math.floor(ts / 3600000)}`
+    if (seen.has(key)) return false
+    seen.add(key)
+    return true
+  })
+}
+
 function riskLevel(score) {
-  if (score >= 70) return 'CRITICAL'
-  if (score >= 45) return 'HIGH'
-  if (score >= 25) return 'MODERATE'
-  if (score >= 10) return 'LOW'
-  return 'MINIMAL'
+  if (score >= 76) return 'CRITICAL'
+  if (score >= 51) return 'ELEVATED'
+  if (score >= 26) return 'MODERATE'
+  return 'LOW'
 }
 
 export default router

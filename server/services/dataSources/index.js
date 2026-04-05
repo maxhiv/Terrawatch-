@@ -179,12 +179,21 @@ const FLAG_WEIGHTS = {
   'ONSHORE_WIND':                  3,
 }
 
-export function computeHABRiskScore(flags) {
-  let score = 0
-  for (const { flag } of flags) {
-    score += FLAG_WEIGHTS[flag] ?? 0
+export function computeHABRiskScore(flags, habOracleProb = null) {
+  if (habOracleProb !== null && habOracleProb !== undefined && Number.isFinite(habOracleProb)) {
+    const prob = habOracleProb > 1 ? habOracleProb : habOracleProb * 100
+    return Math.min(100, Math.round(prob))
   }
-  return Math.min(100, score)
+
+  const seen = new Set()
+  let dedupedCount = 0
+  for (const { flag } of flags) {
+    if (!seen.has(flag)) {
+      seen.add(flag)
+      dedupedCount++
+    }
+  }
+  return Math.min(100, dedupedCount * 5)
 }
 
 export {

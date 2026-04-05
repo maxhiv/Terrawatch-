@@ -581,13 +581,36 @@ export async function getSnapshotHistory(sourceId, hours = 24) {
 
 export async function saveRiskFlags(flags) {
   const db = await getDB()
-  const stmt = db.prepare(
+
+  const checkStmt = db.prepare(
+    `SELECT COUNT(*) as cnt FROM risk_flag_events
+     WHERE source_id = ? AND flag = ? AND timestamp >= ? AND timestamp < ?`
+  )
+
+  const insertStmt = db.prepare(
     `INSERT INTO risk_flag_events (source_id, flag, context, timestamp) VALUES (?, ?, ?, ?)`
   )
+
   for (const f of flags) {
-    stmt.run([f.source_id, f.flag, f.context ?? null, f.timestamp])
+    const ts = f.timestamp || new Date().toISOString()
+    const hourBucket = Math.floor(new Date(ts).getTime() / 3600000)
+    const bucketStart = new Date(hourBucket * 3600000).toISOString()
+    const bucketEnd = new Date((hourBucket + 1) * 3600000).toISOString()
+
+    checkStmt.bind([f.source_id, f.flag, bucketStart, bucketEnd])
+    const exists = checkStmt.step() ? checkStmt.getAsObject().cnt > 0 : false
+    checkStmt.reset()
+
+    if (exists) {
+      console.log(`[FLAG DEDUP] Suppressed duplicate: ${f.flag} from ${f.source_id}`)
+      continue
+    }
+
+    insertStmt.run([f.source_id, f.flag, f.context ?? null, ts])
   }
-  stmt.free()
+
+  checkStmt.free()
+  insertStmt.free()
 
   const cutoff = new Date(Date.now() - 7 * 24 * 3600000).toISOString()
   db.run(`DELETE FROM risk_flag_events WHERE timestamp < ?`, [cutoff])

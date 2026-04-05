@@ -83,15 +83,39 @@ async function runSourceFetch(source) {
   }
 }
 
+function dedupFlagsForEmit(flags) {
+  const seen = new Set()
+  return flags.filter(f => {
+    const ts = new Date(f.timestamp).getTime()
+    const key = `${f.flag}|${f.source_id}|${Math.floor(ts / 3600000)}`
+    if (seen.has(key)) return false
+    seen.add(key)
+    return true
+  })
+}
+
+async function getHABProbForSnapshot() {
+  try {
+    const port = process.env.PORT || 3001
+    const res = await fetch(`http://localhost:${port}/api/hab/assess`)
+    if (!res.ok) return null
+    const data = await res.json()
+    const prob = data?.hab?.probability
+    return (prob !== null && prob !== undefined && Number.isFinite(prob)) ? prob : null
+  } catch { return null }
+}
+
 async function emitFullSnapshot() {
   try {
     const snapshots = await getLatestSnapshots()
-    const flags     = await getRecentRiskFlags(6)
+    const rawFlags  = await getRecentRiskFlags(6)
+    const flags     = dedupFlagsForEmit(rawFlags)
+    const habProb   = await getHABProbForSnapshot()
     pollerEvents.emit('snapshot', {
       snapshot_time:   new Date().toISOString(),
       sources_fetched: snapshots.length,
       risk_flags:      flags,
-      hab_risk_score:  computeHABRiskScore(flags.map(f => ({ flag: f.flag }))),
+      hab_risk_score:  computeHABRiskScore(flags.map(f => ({ flag: f.flag })), habProb),
       data:            Object.fromEntries(snapshots.map(s => [s.source_id, s])),
     })
   } catch (err) {

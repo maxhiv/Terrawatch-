@@ -9,7 +9,7 @@ const RISK_COLORS = {
   MINIMAL:  '#10b981',
   LOW:      '#34d399',
   MODERATE: '#fbbf24',
-  HIGH:     '#f97316',
+  ELEVATED: '#f97316',
   CRITICAL: '#dc2626',
 }
 
@@ -22,12 +22,22 @@ const CATEGORY_META = {
 }
 
 const GAUGE_BANDS = [
-  { max: 20, color: RISK_COLORS.MINIMAL, label: 'MINIMAL' },
-  { max: 40, color: RISK_COLORS.LOW,     label: 'LOW' },
-  { max: 60, color: RISK_COLORS.MODERATE, label: 'MODERATE' },
-  { max: 80, color: RISK_COLORS.HIGH,    label: 'HIGH' },
-  { max: 100, color: RISK_COLORS.CRITICAL, label: 'CRITICAL' },
+  { max: 25,  color: RISK_COLORS.LOW,      label: 'LOW' },
+  { max: 50,  color: RISK_COLORS.MODERATE,  label: 'MODERATE' },
+  { max: 75,  color: RISK_COLORS.ELEVATED,  label: 'ELEVATED' },
+  { max: 100, color: RISK_COLORS.CRITICAL,  label: 'CRITICAL' },
 ]
+
+function dedupFlagArray(flags) {
+  const seen = new Set()
+  return flags.filter(f => {
+    const ts = new Date(f.timestamp).getTime()
+    const key = `${f.flag}|${f.source_id}|${Math.floor(ts / 3600000)}`
+    if (seen.has(key)) return false
+    seen.add(key)
+    return true
+  })
+}
 
 function RiskGauge({ score, level }) {
   const color = RISK_COLORS[level] || '#94a3b8'
@@ -284,7 +294,7 @@ export default function DataSources() {
       const sources = regRes.sources || []
       setRegistry(sources)
       setSnapshots(latestRes.snapshots || [])
-      setRiskFlags(latestRes.active_flags || [])
+      setRiskFlags(dedupFlagArray(latestRes.active_flags || []))
       setRiskScore(riskRes)
       for (const src of sources) {
         fetch(`${API}/${src.id}/history?hours=6`)
@@ -354,11 +364,15 @@ export default function DataSources() {
       try {
         const ev = JSON.parse(e.data)
         if (Array.isArray(ev.flags)) {
-          setRiskFlags(prev => [...ev.flags.map(f => ({
+          const newFlags = ev.flags.map(f => ({
             flag: typeof f === 'string' ? f : f.flag,
             source_id: ev.source_id,
             timestamp: new Date().toISOString(),
-          })), ...prev].slice(0, 100))
+          }))
+          setRiskFlags(prev => {
+            const merged = [...newFlags, ...prev]
+            return dedupFlagArray(merged).slice(0, 100)
+          })
         }
       } catch {}
     })
@@ -368,11 +382,14 @@ export default function DataSources() {
         const snap = JSON.parse(e.data)
         if (snap.hab_risk_score != null) {
           const s = snap.hab_risk_score
-          const lvl = s >= 75 ? 'CRITICAL' : s >= 50 ? 'HIGH' : s >= 25 ? 'MODERATE' : s >= 10 ? 'LOW' : 'MINIMAL'
+          const lvl = s >= 76 ? 'CRITICAL' : s >= 51 ? 'ELEVATED' : s >= 26 ? 'MODERATE' : 'LOW'
           setRiskScore(prev => prev
             ? { ...prev, score: s, level: lvl }
             : { score: s, level: lvl }
           )
+        }
+        if (Array.isArray(snap.risk_flags)) {
+          setRiskFlags(dedupFlagArray(snap.risk_flags))
         }
       } catch {}
     })
@@ -462,6 +479,7 @@ export default function DataSources() {
               ) : (
                 <div className="text-bay-400 text-sm py-6">Loading...</div>
               )}
+              <div className="text-[10px] text-gray-400 mt-1">Score mirrors HAB Oracle probability</div>
             </div>
 
             <div className="tw-card">
