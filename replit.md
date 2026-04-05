@@ -27,6 +27,17 @@ Planetary Environmental Intelligence Platform — Mobile Bay & Gulf Coast
 - **Hypoxia Forecast**: Halocline-based stratification model with Jubilee detection conditions
 - **Alert Engine**: evaluateAndDispatchAlerts() — hypoxia, stratification, bloom, compound stress, flood, air quality
 
+## Public Metrics API (terrawatch.io integration)
+
+- **Route**: `GET /api/metrics` — All 7 card metrics (5-min cached JSON)
+- **Route**: `GET /api/metrics/:id` — Single metric by ID
+- **Route**: `GET /api/metrics/stream` — SSE push every 5min
+- **Cache invalidation**: Automatic on poller snapshot events
+- **CORS**: Allows `terrawatch.io`, `www.terrawatch.io`, `localhost:3000/5173/5000`
+- **Metric IDs**: `hab_oracle`, `hypoxia_forecast`, `jubilee_predictor`, `water_quality`, `compound_flood`, `beach_safety`, `pollution_tracker`
+- **Files**: `server/services/metricsAggregator.js` (computes from DB snapshots), `server/routes/metrics.js` (Express router)
+- **Frontend embed**: `attached_assets/terrawatch-metrics-patch_*/frontend/terrawatch-metrics.js` — drop into Framer custom code, set `API_BASE` to deployed URL
+
 ## GOES-19 Dual-Track Architecture
 
 - **Push pipeline**: `routes/goes19.js` → SQLite DB → `getLatestGOESReadings()` → `_latestData.goesLatest` → ML model + frontend

@@ -21,7 +21,8 @@ import beachRoutes from './routes/beach.js'
 import climateRoutes from './routes/climate.js'
 import pollutionRoutes from './routes/pollution.js'
 import dataSourcesRouter from './routes/dataSources.js'
-import { startPoller } from './jobs/dataSourcePoller.js'
+import metricsRouter, { invalidateMetricsCache } from './routes/metrics.js'
+import { startPoller, pollerEvents } from './jobs/dataSourcePoller.js'
 
 import { getRealtimeData as getUSGSData } from './services/usgs.js'
 import { getAllCoopsConditions as getNOAAData, getBuoyData, getMobileWeather } from './services/noaa.js'
@@ -64,6 +65,7 @@ app.use('/api/beach', beachRoutes)
 app.use('/api/climate', climateRoutes)
 app.use('/api/pollution', pollutionRoutes)
 app.use('/api/datasources', dataSourcesRouter)
+app.use('/api/metrics', metricsRouter)
 
 app.get('/api/health', async (req, res) => {
   let dbStats = null
@@ -352,6 +354,7 @@ setTimeout(async () => {
 
 app.listen(PORT, () => {
   startPoller()
+  pollerEvents.on('snapshot', () => invalidateMetricsCache())
   console.log(`
 ╔══════════════════════════════════════════════════════════╗
 ║  TERRAWATCH v2.2 — Full-Stack Intelligence Platform      ║
