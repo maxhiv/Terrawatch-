@@ -1,6 +1,6 @@
 import { EventEmitter } from 'events'
-import { DATA_SOURCES, fetchAllSources } from '../services/dataSources/index.js'
-import { saveSnapshot, saveRiskFlags } from '../services/database.js'
+import { DATA_SOURCES, computeHABRiskScore } from '../services/dataSources/index.js'
+import { saveSnapshot, saveRiskFlags, getLatestSnapshots, getRecentRiskFlags } from '../services/database.js'
 
 export const pollerEvents = new EventEmitter()
 
@@ -85,8 +85,15 @@ async function runSourceFetch(source) {
 
 async function emitFullSnapshot() {
   try {
-    const snapshot = await fetchAllSources()
-    pollerEvents.emit('snapshot', snapshot)
+    const snapshots = await getLatestSnapshots()
+    const flags     = await getRecentRiskFlags(6)
+    pollerEvents.emit('snapshot', {
+      snapshot_time:   new Date().toISOString(),
+      sources_fetched: snapshots.length,
+      risk_flags:      flags,
+      hab_risk_score:  computeHABRiskScore(flags.map(f => ({ flag: f.flag }))),
+      data:            Object.fromEntries(snapshots.map(s => [s.source_id, s])),
+    })
   } catch (err) {
     console.error('[Poller] Full snapshot error:', err.message)
   }
