@@ -104,14 +104,8 @@ terrawatch/
 ├── _legacy/                        # Quarantined vestigial files (safe to ignore)
 │   ├── root-cleanup/               # 44 loose root files that were not part of live app
 │   └── dist-snapshot/              # Old build output
-├── infra/
-│   ├── docker-compose.yml          # 3-service topology (api + web + gateway)
-│   ├── nginx/                      # gateway.conf, web.conf, Dockerfile
-│   └── cloudrun/                   # single-image.Dockerfile (staging fallback)
-├── docs/
-│   ├── README.md                   # Full platform documentation (original README)
-│   ├── architecture.md             # Container topology + ML phase organization
-│   └── replit.md                   # Replit config reference
+├── infra/                          # Docker + nginx (populated in Task #16)
+├── docs/                           # Documentation (populated in Task #16)
 └── package.json                    # Workspace root (npm workspaces)
 ```
 
