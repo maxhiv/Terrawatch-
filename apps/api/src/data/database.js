@@ -4,8 +4,8 @@ import path from 'path'
 import { fileURLToPath } from 'url'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
-const DB_PATH = path.join(__dirname, '../../data/terrawatch.db')
-const DATA_DIR = path.join(__dirname, '../../data')
+const DB_PATH = path.join(__dirname, '../../../../data/terrawatch.db')
+const DATA_DIR = path.join(__dirname, '../../../../data')
 
 if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true })
 

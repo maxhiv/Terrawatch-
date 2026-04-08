@@ -35,13 +35,13 @@ Planetary Environmental Intelligence Platform — Mobile Bay & Gulf Coast
 - **Cache invalidation**: Automatic on poller snapshot events
 - **CORS**: Allows `terrawatch.io`, `www.terrawatch.io`, `localhost:3000/5173/5000`
 - **Metric IDs**: `hab_oracle`, `hypoxia_forecast`, `jubilee_predictor`, `water_quality`, `compound_flood`, `beach_safety`, `pollution_tracker`
-- **Files**: `server/services/metricsAggregator.js` (computes from DB snapshots), `server/routes/metrics.js` (Express router)
+- **Files**: `apps/api/src/products/core/services/features/metricsAggregator.js` (computes from DB snapshots), `apps/api/src/products/core/routes/metrics.js` (Express router)
 - **Frontend embed**: `attached_assets/terrawatch-metrics-patch_*/frontend/terrawatch-metrics.js` — drop into Framer custom code, set `API_BASE` to deployed URL
 
 ## GOES-19 Dual-Track Architecture
 
-- **Push pipeline**: `routes/goes19.js` → SQLite DB → `getLatestGOESReadings()` → `_latestData.goesLatest` → ML model + frontend
-- **ERDDAP pull**: `services/goes.js` → CoastWatch ERDDAP (currently 404, fallback to push)
+- **Push pipeline**: `products/core/routes/goes19.js` → SQLite DB → `getLatestGOESReadings()` → `_latestData.goesLatest` → ML model + frontend
+- **ERDDAP pull**: `products/core/services/ingest/goes.js` → CoastWatch ERDDAP (currently 404, fallback to push)
 - **Frontend merge**: `/api/sensors/goes/all` returns `status` (ERDDAP), `imagery` (CDN), and `push` (DB) fields
 - **Push fields**: sst_mean, sst_gradient, qpe_rainfall, qpe_6h, qpe_24h, cloud_coverage, glm_flashes, glm_active, amv_wind_speed, amv_wind_dir, bloom_index, turbidity_idx
 
@@ -50,37 +50,57 @@ Planetary Environmental Intelligence Platform — Mobile Bay & Gulf Coast
 ```
 terrawatch/
 ├── apps/
-│   └── web/                        # @terrawatch/web — React frontend
+│   ├── web/                        # @terrawatch/web — React frontend
+│   │   ├── src/
+│   │   │   ├── pages/
+│   │   │   │   ├── core/           # Dashboard, HabOracle, HypoxiaForecast, WaterQuality,
+│   │   │   │   │                   # BeachSafety, CompoundFlood, ClimateVulnerability,
+│   │   │   │   │                   # PollutionTracker, Intelligence, MapPage, ScienceView,
+│   │   │   │   │                   # Alerts, AIAssistant
+│   │   │   │   ├── sitevault/      # SITEVAULT.jsx
+│   │   │   │   ├── wetlandai/      # WetlandAI.jsx
+│   │   │   │   └── platform/       # SensorsRegistry, DataSources, DataStream, FeedStatus,
+│   │   │   │                       # MLArchitecture, MasterRoadmap, Vision
+│   │   │   ├── components/
+│   │   │   │   ├── common/         # StatCard, PageHeader, RiskBadge, Spinner, etc.
+│   │   │   │   ├── charts/         # DOChart, HABProbabilityChart, etc.
+│   │   │   │   └── layout/         # Sidebar navigation Layout
+│   │   │   ├── store/index.js      # Zustand store
+│   │   │   ├── App.jsx             # Router (23 routes)
+│   │   │   ├── main.jsx            # React entry point
+│   │   │   └── index.css           # Tailwind + custom classes
+│   │   ├── index.html
+│   │   ├── vite.config.js          # Vite (port 5000, proxy /api → :3001)
+│   │   ├── tailwind.config.js      # Bay palette
+│   │   └── package.json
+│   └── api/                        # @terrawatch/api — Express backend
 │       ├── src/
-│       │   ├── pages/
-│       │   │   ├── core/           # Dashboard, HabOracle, HypoxiaForecast, WaterQuality,
-│       │   │   │                   # BeachSafety, CompoundFlood, ClimateVulnerability,
-│       │   │   │                   # PollutionTracker, Intelligence, MapPage, ScienceView,
-│       │   │   │                   # Alerts, AIAssistant
-│       │   │   ├── sitevault/      # SITEVAULT.jsx
-│       │   │   ├── wetlandai/      # WetlandAI.jsx
-│       │   │   └── platform/       # SensorsRegistry, DataSources, DataStream, FeedStatus,
-│       │   │                       # MLArchitecture, MasterRoadmap, Vision
-│       │   ├── components/
-│       │   │   ├── common/         # StatCard, PageHeader, RiskBadge, Spinner, etc.
-│       │   │   ├── charts/         # DOChart, HABProbabilityChart, etc.
-│       │   │   └── layout/         # Sidebar navigation Layout
-│       │   ├── store/index.js      # Zustand store
-│       │   ├── App.jsx             # Router (23 routes)
-│       │   ├── main.jsx            # React entry point
-│       │   └── index.css           # Tailwind + custom classes
-│       ├── index.html
-│       ├── vite.config.js          # Vite (port 5000, proxy /api → :3001)
-│       ├── tailwind.config.js      # Bay palette
+│       │   ├── index.js            # Server entry point (cron jobs, boot)
+│       │   ├── app.js              # createApp() — Express app construction
+│       │   ├── config/env.js       # Centralized env reads
+│       │   ├── middleware/         # CORS, rate limiting, JSON parsing
+│       │   ├── products/
+│       │   │   └── core/
+│       │   │       ├── routes/     # All API route handlers
+│       │   │       └── services/
+│       │   │           ├── ingest/ # Data source fetchers (USGS, NOAA, NERRS, etc.)
+│       │   │           └── features/ # crossSensor, mlTrainer, metricsAggregator
+│       │   ├── data/
+│       │   │   ├── database.js     # SQLite via sql.js
+│       │   │   └── sources/        # Data source definitions + polling configs
+│       │   ├── ml/
+│       │   │   ├── shared/         # featureVector.js (152-key spec, single source of truth)
+│       │   │   ├── phase1-logreg/  # habOracle.js
+│       │   │   ├── phase2-rf-shap/ # randomForest.js, shap.js
+│       │   │   └── phase3-deep/    # piRnn.js, stfGnn.js, stTransformer.js
+│       │   └── jobs/               # dataSourcePoller.js
 │       └── package.json
-├── server/                         # Express API (moves to apps/api in Task #15)
-│   ├── index.js
-│   ├── routes/
-│   ├── services/
-│   ├── ml/
-│   └── jobs/
 ├── packages/
-│   └── shared/                     # @terrawatch/shared (populated in Task #15)
+│   └── shared/                     # @terrawatch/shared — cross-app constants
+│       ├── src/
+│       │   ├── index.js            # Re-exports FEATURE_KEYS
+│       │   └── featureVector.js    # 152-key feature vector spec
+│       └── package.json
 ├── _legacy/                        # Quarantined vestigial files (safe to ignore)
 │   ├── root-cleanup/               # 44 loose root files that were not part of live app
 │   └── dist-snapshot/              # Old build output

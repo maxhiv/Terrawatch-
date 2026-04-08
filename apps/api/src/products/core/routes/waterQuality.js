@@ -1,6 +1,6 @@
 import express from 'express'
-import { getRealtimeData, getHistoricalData, MOBILE_BAY_STATIONS } from '../services/usgs.js'
-import { getAllCoopsConditions, getBuoyData } from '../services/noaa.js'
+import { getRealtimeData, getHistoricalData, MOBILE_BAY_STATIONS } from '../services/ingest/usgs.js'
+import { getAllCoopsConditions, getBuoyData } from '../services/ingest/noaa.js'
 
 const router = express.Router()
 

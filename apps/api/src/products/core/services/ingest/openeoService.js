@@ -1,5 +1,5 @@
 import axios from 'axios'
-import { upsertOpenEOJob } from './database.js'
+import { upsertOpenEOJob } from '../../../../data/database.js'
 
 const OPENEO_BASE = 'https://openeo.vito.be/openeo/1.1'
 const MOBILE_BAY_BBOX = { west: -88.5, south: 30.1, east: -87.5, north: 30.8 }

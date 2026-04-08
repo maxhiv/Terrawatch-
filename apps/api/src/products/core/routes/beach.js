@@ -1,5 +1,5 @@
 import express from 'express'
-import { getADPHClosures } from '../services/adph.js'
+import { getADPHClosures } from '../services/ingest/adph.js'
 
 const router = express.Router()
 

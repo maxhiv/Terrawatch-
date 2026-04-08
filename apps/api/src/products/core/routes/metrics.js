@@ -1,5 +1,5 @@
 import express from 'express';
-import { computeAllMetrics } from '../services/metricsAggregator.js';
+import { computeAllMetrics } from '../services/features/metricsAggregator.js';
 
 const router = express.Router();
 

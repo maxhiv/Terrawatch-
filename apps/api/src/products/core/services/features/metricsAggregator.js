@@ -1,4 +1,4 @@
-import { getLatestSnapshotForSource } from './database.js';
+import { getLatestSnapshotForSource } from '../../../../data/database.js';
 
 function clamp(val, min, max) {
   return Math.max(min, Math.min(max, val));

@@ -1,13 +1,13 @@
 import express from 'express'
-import { DATA_SOURCES, computeHABRiskScore } from '../services/dataSources/index.js'
-import { triggerSourceRefresh, pollerEvents } from '../jobs/dataSourcePoller.js'
+import { DATA_SOURCES, computeHABRiskScore } from '../../../data/sources/index.js'
+import { triggerSourceRefresh, pollerEvents } from '../../../jobs/dataSourcePoller.js'
 import {
   getLatestSnapshots,
   getLatestSnapshotForSource,
   getSnapshotHistory,
   getRecentRiskFlags,
   getHABRiskHistory,
-} from '../services/database.js'
+} from '../../../data/database.js'
 let cachedHABProb = null
 let cachedHABProbTime = 0
 const HAB_PROB_TTL = 3 * 60 * 1000

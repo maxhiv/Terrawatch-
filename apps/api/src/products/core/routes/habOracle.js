@@ -1,6 +1,6 @@
 import express from 'express'
-import { runHabOracle, runHypoxiaForecast } from '../ml/habOracle.js'
-import { getLatestGOESReadings } from '../services/database.js'
+import { runHabOracle, runHypoxiaForecast } from '../../../ml/phase1-logreg/habOracle.js'
+import { getLatestGOESReadings } from '../../../data/database.js'
 
 const router = express.Router()
 

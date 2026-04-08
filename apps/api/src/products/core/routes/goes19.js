@@ -1,5 +1,5 @@
 import express from 'express'
-import { writeReadings, getLatestGOESReadings } from '../services/database.js'
+import { writeReadings, getLatestGOESReadings } from '../../../data/database.js'
 
 const router = express.Router()
 

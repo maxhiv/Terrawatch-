@@ -1,10 +1,10 @@
 import express from 'express'
-import { getCurrentSummary, getMobileBayCurrents } from '../services/hfradar.js'
-import { getWeeksBayLatest, getWeeksBayTimeSeries } from '../services/nerrs.js'
-import { getPaceStatus, getPaceHabSignal, searchPaceGranules } from '../services/pace.js'
-import { getMethaneStatus, searchTROPOMIGranules } from '../services/tropomi.js'
-import { getMobileBayNPDESFacilities, getWQPResults, getMobileAQI, getTRIFacilities } from '../services/epa.js'
-import { getGOES19Status, getGOES19LatestImage, getAllGOESStatus } from '../services/goes.js'
+import { getCurrentSummary, getMobileBayCurrents } from '../services/ingest/hfradar.js'
+import { getWeeksBayLatest, getWeeksBayTimeSeries } from '../services/ingest/nerrs.js'
+import { getPaceStatus, getPaceHabSignal, searchPaceGranules } from '../services/ingest/pace.js'
+import { getMethaneStatus, searchTROPOMIGranules } from '../services/ingest/tropomi.js'
+import { getMobileBayNPDESFacilities, getWQPResults, getMobileAQI, getTRIFacilities } from '../services/ingest/epa.js'
+import { getGOES19Status, getGOES19LatestImage, getAllGOESStatus } from '../services/ingest/goes.js'
 import axios from 'axios'
 
 const router = express.Router()

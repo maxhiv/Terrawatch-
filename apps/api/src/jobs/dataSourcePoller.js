@@ -1,6 +1,6 @@
 import { EventEmitter } from 'events'
-import { DATA_SOURCES, computeHABRiskScore } from '../services/dataSources/index.js'
-import { saveSnapshot, saveRiskFlags, getLatestSnapshots, getRecentRiskFlags } from '../services/database.js'
+import { DATA_SOURCES, computeHABRiskScore } from '../data/sources/index.js'
+import { saveSnapshot, saveRiskFlags, getLatestSnapshots, getRecentRiskFlags } from '../data/database.js'
 
 export const pollerEvents = new EventEmitter()
 

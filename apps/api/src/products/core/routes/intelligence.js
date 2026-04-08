@@ -2,10 +2,10 @@ import express from 'express'
 import {
   getDBStats, getHistory, getLabeledVectors, getRecentEvents,
   getModelHistory, getAllVectors, getUnexportedVectors, markVectorsExported
-} from '../services/database.js'
-import { retrainHABOracle, runInference, exportVectorsCSV, PHASE_THRESHOLDS, FEATURE_KEYS } from '../services/mlTrainer.js'
-import { buildFeatureVector, autoLabel, THRESHOLDS } from '../services/crossSensor.js'
-import { getSourceHealthSummary } from '../services/database.js'
+} from '../../../data/database.js'
+import { retrainHABOracle, runInference, exportVectorsCSV, PHASE_THRESHOLDS, FEATURE_KEYS } from '../services/features/mlTrainer.js'
+import { buildFeatureVector, autoLabel, THRESHOLDS } from '../services/features/crossSensor.js'
+import { getSourceHealthSummary } from '../../../data/database.js'
 
 const router = express.Router()
 

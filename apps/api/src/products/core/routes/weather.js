@@ -1,5 +1,5 @@
 import express from 'express'
-import { getMobileWeather, getActiveAlerts } from '../services/noaa.js'
+import { getMobileWeather, getActiveAlerts } from '../services/ingest/noaa.js'
 const router = express.Router()
 
 router.get('/current', async (req, res) => {
