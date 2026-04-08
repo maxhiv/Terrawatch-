@@ -1,2 +1,3 @@
 data/terrawatch.db
-data/terrawatch.db
+dist/
+node_modules/
