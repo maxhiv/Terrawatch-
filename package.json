@@ -4,12 +4,12 @@
   "description": "TERRAWATCH — Planetary Environmental Intelligence Platform",
   "private": true,
   "type": "module",
+  "workspaces": ["apps/*", "packages/*"],
   "scripts": {
     "dev": "concurrently \"npm run dev:server\" \"npm run dev:client\"",
-    "dev:client": "vite --port 5000 --host 0.0.0.0",
+    "dev:client": "npm --workspace @terrawatch/web run dev -- --port 5000 --host 0.0.0.0",
     "dev:server": "node --watch server/index.js",
-    "build": "vite build",
-    "preview": "vite preview",
+    "build": "npm --workspace @terrawatch/web run build",
     "start": "node server/index.js"
   },
   "dependencies": {

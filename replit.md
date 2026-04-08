@@ -45,98 +45,48 @@ Planetary Environmental Intelligence Platform — Mobile Bay & Gulf Coast
 - **Frontend merge**: `/api/sensors/goes/all` returns `status` (ERDDAP), `imagery` (CDN), and `push` (DB) fields
 - **Push fields**: sst_mean, sst_gradient, qpe_rainfall, qpe_6h, qpe_24h, cloud_coverage, glm_flashes, glm_active, amv_wind_speed, amv_wind_dir, bloom_index, turbidity_idx
 
-## Project Structure
+## Project Structure (Monorepo)
 
 ```
 terrawatch/
-├── src/                        # React frontend
-│   ├── pages/                  # 21 page components
-│   │   ├── Dashboard.jsx       # Main environmental dashboard (GOES alert strip, UV/gust/PM2.5 cards, data sources widget)
-│   │   ├── HabOracle.jsx       # HAB prediction (World First™)
-│   │   ├── HypoxiaForecast.jsx # Hypoxia risk forecasting with Jubilee detection
-│   │   ├── WaterQuality.jsx    # Interactive water quality map
-│   │   ├── SensorsRegistry.jsx # Data feed registry
-│   │   ├── CompoundFlood.jsx   # Compound flood intelligence (AHPS + GOES QPE + USGS flow)
-│   │   ├── BeachSafety.jsx     # Beach safety (swim index, ADPH closures, UV, currents)
-│   │   ├── DataSources.jsx      # 9 external data sources — HAB risk gauge, source cards, SSE live updates, 72h history
-│   │   ├── ClimateVulnerability.jsx # Climate vulnerability index (SST, DO₂, heat index)
-│   │   ├── PollutionTracker.jsx # Pollution tracker (AQI, PM2.5, turbidity, nutrients)
-│   │   ├── WetlandAI.jsx       # Wetland pre-delineation
-│   │   ├── SITEVAULT.jsx       # Site assessment vault
-│   │   ├── MapPage.jsx         # Satellite map view (4 live overlay layers)
-│   │   ├── DataStream.jsx      # 142-key feature vector explorer (9 tabs)
-│   │   ├── ScienceView.jsx     # Science data explorer
-│   │   ├── FeedStatus.jsx      # Live feed status dashboard
-│   │   ├── Intelligence.jsx    # ML intelligence dashboard
-│   │   ├── Alerts.jsx          # Alert center
-│   │   ├── AIAssistant.jsx     # AI field assistant
-│   │   ├── Vision.jsx          # Platform vision
-│   │   └── MLArchitecture.jsx  # ML architecture docs
-│   ├── components/
-│   │   ├── Common/index.jsx    # StatCard (glass, risk tints, sparklines, freshness), PageHeader, RiskBadge, Spinner, SkeletonCard, SkeletonRow, Section, EmptyState, AlertBanner
-│   │   ├── Charts/index.jsx    # DOChart, HABProbabilityChart, WeatherForecastChart, AirQualityChart, SatelliteTimelineChart, OceanConditionsChart
-│   │   └── Layout/Layout.jsx   # Sidebar navigation (22 routes, "142 KEYS" DataStream badge, 4 NEW product badges)
-│   ├── store/index.js          # Zustand store (all API fetchers including flood/beach/climate/pollution/inference/sourceHealth/ADPH)
-│   ├── App.jsx                 # Router with nested Layout routes (20 pages)
-│   ├── main.jsx                # React entry point
-│   └── index.css               # Tailwind + custom classes
-├── server/                     # Express API
-│   ├── index.js                # Server entry (port 3001, trust proxy, alert engine, nightly retrain cron)
+├── apps/
+│   └── web/                        # @terrawatch/web — React frontend
+│       ├── src/
+│       │   ├── pages/
+│       │   │   ├── core/           # Dashboard, HabOracle, HypoxiaForecast, WaterQuality,
+│       │   │   │                   # BeachSafety, CompoundFlood, ClimateVulnerability,
+│       │   │   │                   # PollutionTracker, Intelligence, MapPage, ScienceView,
+│       │   │   │                   # Alerts, AIAssistant
+│       │   │   ├── sitevault/      # SITEVAULT.jsx
+│       │   │   ├── wetlandai/      # WetlandAI.jsx
+│       │   │   └── platform/       # SensorsRegistry, DataSources, DataStream, FeedStatus,
+│       │   │                       # MLArchitecture, MasterRoadmap, Vision
+│       │   ├── components/
+│       │   │   ├── common/         # StatCard, PageHeader, RiskBadge, Spinner, etc.
+│       │   │   ├── charts/         # DOChart, HABProbabilityChart, etc.
+│       │   │   └── layout/         # Sidebar navigation Layout
+│       │   ├── store/index.js      # Zustand store
+│       │   ├── App.jsx             # Router (23 routes)
+│       │   ├── main.jsx            # React entry point
+│       │   └── index.css           # Tailwind + custom classes
+│       ├── index.html
+│       ├── vite.config.js          # Vite (port 5000, proxy /api → :3001)
+│       ├── tailwind.config.js      # Bay palette
+│       └── package.json
+├── server/                         # Express API (moves to apps/api in Task #15)
+│   ├── index.js
 │   ├── routes/
-│   │   ├── waterQuality.js     # /api/water/*
-│   │   ├── habOracle.js        # /api/hab/*
-│   │   ├── weather.js          # /api/weather/*
-│   │   ├── alerts.js           # /api/alerts
-│   │   ├── sensors.js          # /api/sensors/*
-│   │   ├── goes19.js           # /api/goes19/*
-│   │   ├── ai.js               # /api/ai/*
-│   │   ├── intelligence.js     # /api/intelligence/* (feature-keys, export-csv, explain/SHAP, source-health)
-│   │   ├── mlArchitecture.js   # /api/ml/*
-│   │   ├── flood.js            # /api/flood/status (compound flood risk)
-│   │   ├── beach.js            # /api/beach/status (swim safety + ADPH closures)
-│   │   ├── climate.js          # /api/climate/status (vulnerability index)
-│   │   ├── pollution.js        # /api/pollution/status (pollution index)
-│   │   └── dataSources.js     # /api/datasources/* (9-source registry, latest, risk, SSE stream, refresh)
-│   ├── jobs/
-│   │   └── dataSourcePoller.js # EventEmitter-based per-source polling with configurable intervals
 │   ├── services/
-│   │   ├── usgs.js             # USGS NWIS water data (6 stations, gage_height, orthophosphate, total_nitrogen)
-│   │   ├── noaa.js             # NOAA CO-OPS, NWS, NDBC
-│   │   ├── hfradar.js          # NOAA ERDDAP surface currents (3-endpoint fallback: 6km → 1km → THREDDS)
-│   │   ├── nerrs.js            # Weeks Bay CDMO dock sensors (primary wekbwq + secondary wekbwq2)
-│   │   ├── pace.js             # NASA PACE OCI ocean color
-│   │   ├── tropomi.js          # Sentinel-5P CH4 methane
-│   │   ├── epa.js              # EPA ECHO/WQP/AirNow/TRI
-│   │   ├── openeo.js           # Copernicus Algorithm Plaza (8 algorithms)
-│   │   ├── adph.js             # Alabama Dept Public Health shellfish closures
-│   │   ├── database.js         # SQLite persistence (sql.js, snapshot storage, risk flag events)
-│   │   ├── crossSensor.js      # Cross-sensor feature assembly (152 keys) + corrected autoLabel (K. brevis ecology + ERDDAP chl + GCOOS temp fallbacks)
-│   │   ├── mlTrainer.js        # ML training pipeline (Phase 1-3, Random Forest, SHAP, exportVectorsCSV)
-│   │   ├── dataSources/        # 9 new live data source fetcher modules
-│   │   │   ├── index.js        # Master registry, fetchAllSources, computeHABRiskScore
-│   │   │   ├── usgsGauges.js   # USGS NWIS extended gauge network (5 watershed stations)
-│   │   │   ├── noaaPorts.js    # NOAA PORTS bay-wide (Dauphin Is, Dog River, Coden)
-│   │   │   ├── nwsForecast.js  # NWS 48h hourly + 7-day forecast (3 grid points)
-│   │   │   ├── erddapOceanColor.js # MODIS+VIIRS chl-a + SST from CoastWatch ERDDAP
-│   │   │   ├── epaEcho.js      # EPA ECHO NPDES nutrient loading
-│   │   │   ├── gulfCoast.js    # GCOOS/NDBC buoys + NOAA HAB Bulletin
-│   │   │   └── vesselTraffic.js # AIS vessel traffic + USACE dredge notices
-│   │   ├── satellite.js        # MODIS, VIIRS, HLS, Landsat, Sentinel-2, Copernicus DEM
-│   │   ├── ocean.js            # CMEMS, HYCOM, CoastWatch, StreamStats, Digital Coast
-│   │   ├── ecology.js          # iNaturalist, GBIF, eBird, AmeriFlux
-│   │   ├── landregweather.js   # Open-Meteo (fixed hour index), AHPS (XML stage parse), NCEI, SSURGO, NWI, FEMA, NLCD, ATTAINS, USACE
-│   │   ├── airplus.js          # EPA AQS, OpenAQ, PurpleAir
-│   │   └── goes.js             # GOES-19 ABI SST (CoastWatch ERDDAP) + imagery (NOAA STAR CDN)
-│   └── ml/
-│       ├── habOracle.js        # HAB Oracle algorithm (11 factors, PAR bloom growth, halocline hypoxia model, Jubilee detection)
-│       ├── randomForest.js     # Phase 2 Random Forest ensemble
-│       ├── shap.js             # Permutation SHAP explainability
-│       ├── stfGnn.js           # Spatio-temporal GNN (Phase 3 pre-wire)
-│       ├── stTransformer.js    # Spatio-temporal Transformer (Phase 3 pre-wire)
-│       └── piRnn.js            # Physics-informed RNN (Phase 3 pre-wire)
-├── vite.config.js              # Vite (port 5000, proxy /api → :3001)
-├── tailwind.config.js          # Bay palette (light greens)
-└── package.json                # Monorepo scripts
+│   ├── ml/
+│   └── jobs/
+├── packages/
+│   └── shared/                     # @terrawatch/shared (populated in Task #15)
+├── _legacy/                        # Quarantined vestigial files (safe to ignore)
+│   ├── root-cleanup/               # 44 loose root files that were not part of live app
+│   └── dist-snapshot/              # Old build output
+├── infra/                          # Docker + nginx (populated in Task #16)
+├── docs/                           # Documentation (populated in Task #16)
+└── package.json                    # Workspace root (npm workspaces)
 ```
 
 ## Running
