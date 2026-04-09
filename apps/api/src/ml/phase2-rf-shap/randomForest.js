@@ -142,6 +142,9 @@ export function predictForest(model, x) {
       positive: probs.filter(p => p > 0.5).length,
       negative: probs.filter(p => p <= 0.5).length,
     },
+    // Raw per-tree probabilities enable bootstrap-style uncertainty
+    // quantification (std / 95% CI) at the call site.
+    treeProbabilities: probs,
   }
 }
 

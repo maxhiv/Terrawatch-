@@ -5,7 +5,7 @@ import {
 } from '../../../../data/database.js'
 import { trainRandomForest, predictForest, evaluateForest } from '../../../../ml/phase2-rf-shap/randomForest.js'
 import { computePermutationSHAP } from '../../../../ml/phase2-rf-shap/shap.js'
-import { autoLabel } from './crossSensor.js'
+import { autoLabel, LABEL_CONFIDENCE_THRESHOLD } from './crossSensor.js'
 import { FEATURE_KEYS, FEATURE_DEFAULTS } from '../../../../ml/shared/featureVector.js'
 
 const PHASE_THRESHOLDS = {
@@ -18,6 +18,29 @@ const sigmoid = x => 1 / (1 + Math.exp(-Math.max(-500, Math.min(500, x))))
 const dot = (a, b) => a.reduce((s, ai, i) => s + ai * (b[i] || 0), 0)
 const mean = arr => arr.reduce((a,b) => a+b, 0) / arr.length
 const std = arr => { const m = mean(arr); return Math.sqrt(mean(arr.map(v=>(v-m)**2))) }
+
+// ── Deployed model cache ──────────────────────────────────────────────────────
+// The frontend polls /api/inference/* every ~30s. Previously each call re-read
+// the model_registry row and JSON.parsed the weight blob. Deployed models only
+// change when retrainHABOracle() promotes a new one, so we cache the parsed
+// model in memory and invalidate on promotion.
+const DEPLOYED_MODEL_TTL_MS = 2 * 60 * 60 * 1000 // 2 hours safety TTL
+const _deployedModelCache = new Map() // modelType -> { model, ts }
+
+async function getCachedDeployedModel(modelType) {
+  const entry = _deployedModelCache.get(modelType)
+  if (entry && Date.now() - entry.ts < DEPLOYED_MODEL_TTL_MS) {
+    return entry.model
+  }
+  const model = await getDeployedModel(modelType)
+  _deployedModelCache.set(modelType, { model, ts: Date.now() })
+  return model
+}
+
+function invalidateDeployedModelCache(modelType) {
+  if (modelType) _deployedModelCache.delete(modelType)
+  else _deployedModelCache.clear()
+}
 
 function extractFeatureArray(featuresJson) {
   const f = typeof featuresJson === 'string' ? JSON.parse(featuresJson) : featuresJson
@@ -99,10 +122,19 @@ export async function backfillUnlabeledVectors() {
     }
 
     const updates = []
+    let skippedLowConfidence = 0
     for (const vec of unlabeled) {
-      const labels = autoLabel(vec.features)
-      if (labels.hab != null || labels.hypoxia != null) {
-        updates.push({ id: vec.id, labelHab: labels.hab, labelHypoxia: labels.hypoxia })
+      const result = autoLabel(vec.features)
+      // Only persist labels the heuristic is confident about. Uncertain
+      // rows stay unlabeled so the trainer never sees weak supervision.
+      const habConf     = result.confidence?.hab ?? 0
+      const hypoxiaConf = result.confidence?.hypoxia ?? 0
+      const labelHab     = habConf     >= LABEL_CONFIDENCE_THRESHOLD ? result.hab     : null
+      const labelHypoxia = hypoxiaConf >= LABEL_CONFIDENCE_THRESHOLD ? result.hypoxia : null
+      if (labelHab != null || labelHypoxia != null) {
+        updates.push({ id: vec.id, labelHab, labelHypoxia })
+      } else if (result.hab != null || result.hypoxia != null) {
+        skippedLowConfidence++
       }
     }
 
@@ -110,8 +142,8 @@ export async function backfillUnlabeledVectors() {
       await batchUpdateVectorLabels(updates)
     }
 
-    console.log(`[MLTrainer] Backfill complete: ${updates.length}/${unlabeled.length} vectors labeled`)
-    return { backfilled: updates.length, total: unlabeled.length }
+    console.log(`[MLTrainer] Backfill complete: ${updates.length}/${unlabeled.length} vectors labeled (${skippedLowConfidence} skipped low-confidence)`)
+    return { backfilled: updates.length, total: unlabeled.length, skippedLowConfidence }
   } catch (err) {
     console.error('[MLTrainer] Backfill error:', err.message)
     return { backfilled: 0, total: 0, error: err.message }
@@ -142,7 +174,7 @@ export async function retrainHABOracle() {
   const X = labeled.map(v => extractFeatureArray(v.features))
   const y = labeled.map(v => v.label_hypoxia !== null ? v.label_hypoxia : (v.label_hab || 0))
 
-  const current = await getDeployedModel('hab_oracle')
+  const current = await getCachedDeployedModel('hab_oracle')
   const prevAccuracy = current?.accuracy || 0
 
   console.log(`[MLTrainer] Phase ${phase} training — ${labeled.length} samples, ${FEATURE_KEYS.length} features`)
@@ -170,6 +202,7 @@ export async function retrainHABOracle() {
 
   if (improved) {
     await writeModel('hab_oracle', version, accuracy, aucRoc, labeled.length, model, phase)
+    invalidateDeployedModelCache('hab_oracle')
   }
 
   await writeRetrainLog({ status: improved ? 'promoted' : 'held', accuracy, prevAccuracy, nSamples: labeled.length, promoted: improved, notes })
@@ -274,7 +307,7 @@ export async function triggerVertexAITraining(labeled, stats) {
 }
 
 export async function runInference(features) {
-  const model = await getDeployedModel('hab_oracle')
+  const model = await getCachedDeployedModel('hab_oracle')
   if (!model?.weights) {
     return { prediction: null, confidence: null, note: 'No trained model deployed yet. Accumulating training data.' }
   }
@@ -283,13 +316,53 @@ export async function runInference(features) {
   const w = model.weights
 
   let prob
+  let treeProbs = null
   if (w.type === 'random_forest') {
     const result = predictForest(w, x)
     prob = result.probability
+    // Random forest exposes per-tree probabilities for bootstrap uncertainty.
+    treeProbs = Array.isArray(result.treeProbabilities) ? result.treeProbabilities : null
   } else {
     const xNorm = x.map((v, j) => (v - (w.means?.[j] || 0)) / (w.stds?.[j] || 1))
     prob = sigmoid(dot(xNorm, w.w) + w.b)
   }
+
+  // ── Uncertainty quantification ────────────────────────────────────────────
+  // Aleatoric: irreducible randomness for a Bernoulli trial is p*(1-p).
+  // Epistemic: captured by model-family specific bounds.
+  //   • Random forest → bootstrap std of per-tree probabilities.
+  //   • Logistic regression → Wilson score interval using validation n.
+  const aleatoricStd = Math.sqrt(prob * (1 - prob))
+  let epistemicStd = null
+  let ciLow = null
+  let ciHigh = null
+  let uncertaintyMethod = null
+
+  if (treeProbs && treeProbs.length > 1) {
+    const n = treeProbs.length
+    const m = treeProbs.reduce((a, b) => a + b, 0) / n
+    const variance = treeProbs.reduce((a, b) => a + (b - m) * (b - m), 0) / n
+    epistemicStd = Math.sqrt(variance)
+    // 95% normal CI on the forest mean probability.
+    const half = 1.96 * epistemicStd / Math.sqrt(n)
+    ciLow  = Math.max(0, m - half)
+    ciHigh = Math.min(1, m + half)
+    uncertaintyMethod = 'forest_bootstrap'
+  } else {
+    // Wilson score interval — robust for probabilities near 0/1.
+    const n = Math.max(1, model.n_samples || 100)
+    const z = 1.96
+    const denom = 1 + (z * z) / n
+    const center = (prob + (z * z) / (2 * n)) / denom
+    const half = (z * Math.sqrt((prob * (1 - prob) + (z * z) / (4 * n)) / n)) / denom
+    ciLow  = Math.max(0, center - half)
+    ciHigh = Math.min(1, center + half)
+    epistemicStd = half / 1.96
+    uncertaintyMethod = 'wilson_score'
+  }
+
+  const ciWidth = ciHigh - ciLow
+  const certainty = ciWidth < 0.15 ? 'HIGH' : ciWidth < 0.30 ? 'MODERATE' : 'LOW'
 
   const label = prob > 0.5 ? 1 : 0
   const riskLevel = prob > 0.8 ? 'CRITICAL' : prob > 0.65 ? 'HIGH' : prob > 0.45 ? 'MODERATE' : 'LOW'
@@ -322,6 +395,15 @@ export async function runInference(features) {
     label,
     confidence: Math.round(prob * 1000) / 10,
     riskLevel,
+    uncertainty: {
+      ci95:          [Math.round(ciLow * 1000) / 1000, Math.round(ciHigh * 1000) / 1000],
+      ciWidth:       Math.round(ciWidth * 1000) / 1000,
+      aleatoricStd:  Math.round(aleatoricStd * 1000) / 1000,
+      epistemicStd:  Math.round(epistemicStd * 1000) / 1000,
+      certainty,
+      method:        uncertaintyMethod,
+      nTrees:        treeProbs ? treeProbs.length : null,
+    },
     modelVersion: model.version,
     modelPhase: model.phase,
     aucRoc: model.auc_roc,

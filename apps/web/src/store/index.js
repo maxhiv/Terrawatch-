@@ -44,6 +44,7 @@ export const useStore = create((set, get) => ({
     const s = get()
     await Promise.allSettled([
       s.fetchWater(), s.fetchHAB(), s.fetchWeather(), s.fetchAlerts(), s.fetchSensors(),
+      s.fetchNERRS?.(), s.fetchHFRadar?.(), s.fetchAQI?.(),
       s.fetchSatelliteStatus(), s.fetchOceanStatus(), s.fetchEcologyStatus(),
       s.fetchLandStatus(), s.fetchAirPlusStatus(), s.fetchGOESStatus(), s.fetchGoesLatest(),
       s.fetchFlood?.(), s.fetchBeach?.(), s.fetchClimate?.(), s.fetchPollution?.(),

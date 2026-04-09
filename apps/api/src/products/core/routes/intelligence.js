@@ -4,7 +4,7 @@ import {
   getModelHistory, getAllVectors, getUnexportedVectors, markVectorsExported
 } from '../../../data/database.js'
 import { retrainHABOracle, runInference, exportVectorsCSV, PHASE_THRESHOLDS, FEATURE_KEYS } from '../services/features/mlTrainer.js'
-import { buildFeatureVector, autoLabel, THRESHOLDS } from '../services/features/crossSensor.js'
+import { buildFeatureVector, getCachedFeatureVector, autoLabel, THRESHOLDS } from '../services/features/crossSensor.js'
 import { getSourceHealthSummary } from '../../../data/database.js'
 
 const router = express.Router()
@@ -13,7 +13,7 @@ router.get('/live-vector', async (req, res) => {
   try {
     const getData = req.app.locals.getLatestData
     const data = getData ? getData() : {}
-    const vector = buildFeatureVector(data)
+    const vector = getCachedFeatureVector(data)
     res.json({ vector, keyCount: Object.keys(vector).length, nonNull: Object.values(vector).filter(v => v != null).length })
   } catch (err) {
     res.json({ error: err.message, vector: {} })
@@ -165,7 +165,7 @@ router.post('/explain', async (req, res) => {
   try {
     const getData = req.app.locals.getLatestData
     const data = getData ? getData() : {}
-    const vector = buildFeatureVector(data)
+    const vector = getCachedFeatureVector(data)
     const result = await runInference(vector)
     res.json({
       prediction: result.prediction,
@@ -186,7 +186,7 @@ router.get('/explain/latest', async (req, res) => {
   try {
     const getData = req.app.locals.getLatestData
     const data = getData ? getData() : {}
-    const vector = buildFeatureVector(data)
+    const vector = getCachedFeatureVector(data)
     const result = await runInference(vector)
     res.json({
       prediction: result.prediction,

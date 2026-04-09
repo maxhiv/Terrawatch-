@@ -18,9 +18,7 @@ export default function Dashboard() {
     waterQuality, habAssessment, weather, alerts, loading,
     nerrs, hfradar, aqi, goesStatus, goesLatest, ecologyStatus, sensors, landStatus, airplusStatus,
     flood, beach, climate, pollution, inference,
-    fetchAll, fetchNERRS, fetchHFRadar, fetchAQI, fetchGOESStatus, fetchGoesLatest,
-    fetchEcologyStatus, fetchLandStatus, fetchAirPlusStatus,
-    fetchFlood, fetchBeach, fetchClimate, fetchPollution, fetchInference,
+    fetchAll,
     lastUpdated, lastFetchedAt
   } = useStore()
 
@@ -29,19 +27,10 @@ export default function Dashboard() {
   const [dsStatus, setDsStatus] = useState(null)
 
   useEffect(() => {
-    fetchNERRS()
-    fetchHFRadar()
-    fetchAQI()
-    fetchGOESStatus()
-    fetchGoesLatest()
-    fetchEcologyStatus()
-    fetchLandStatus()
-    fetchAirPlusStatus()
-    fetchFlood()
-    fetchBeach()
-    fetchClimate()
-    fetchPollution()
-    fetchInference()
+    // Single coordinated fan-out: fetchAll() runs every store action via
+    // Promise.allSettled in parallel, so the dashboard renders as soon as the
+    // slowest slice returns instead of waiting for a sequence of promises.
+    fetchAll()
     Promise.all([
       fetch('/api/datasources').then(r => r.json()),
       fetch('/api/datasources/latest').then(r => r.json()),

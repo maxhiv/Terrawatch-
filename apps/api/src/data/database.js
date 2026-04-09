@@ -146,19 +146,83 @@ export async function getDB() {
   }
 
   _db.run(SCHEMA)
-  saveDB()
+  flushDBSync()
   return _db
 }
 
+// ── Debounced async save ──────────────────────────────────────────────────────
+// Multiple writes within SAVE_DEBOUNCE_MS collapse into a single async flush.
+// Writes are coalesced and performed with fs.promises.writeFile via a tmp +
+// rename for atomicity, so the event loop is never blocked.
+const SAVE_DEBOUNCE_MS = 500
+let _saveTimer = null
+let _savePending = false
+let _saveInFlight = null
+
 export function saveDB() {
   if (!_db) return
+  _savePending = true
+  if (_saveTimer) return
+  _saveTimer = setTimeout(() => {
+    _saveTimer = null
+    void flushDB()
+  }, SAVE_DEBOUNCE_MS)
+  // Unref so a pending save never holds the event loop open on exit.
+  if (typeof _saveTimer.unref === 'function') _saveTimer.unref()
+}
+
+export async function flushDB() {
+  if (!_db) return
+  // If a flush is already running, coalesce — it will re-run when it finishes.
+  if (_saveInFlight) {
+    _savePending = true
+    return _saveInFlight
+  }
+  if (!_savePending) return
+  _savePending = false
+  _saveInFlight = (async () => {
+    try {
+      const data = _db.export()
+      const tmpPath = DB_PATH + '.tmp'
+      await fs.promises.writeFile(tmpPath, Buffer.from(data))
+      await fs.promises.rename(tmpPath, DB_PATH)
+    } catch (err) {
+      console.error('[DB] Save error:', err.message)
+    } finally {
+      _saveInFlight = null
+      if (_savePending) {
+        // More writes came in while flushing — schedule another flush.
+        saveDB()
+      }
+    }
+  })()
+  return _saveInFlight
+}
+
+// Synchronous flush used for boot persistence and graceful shutdown.
+export function flushDBSync() {
+  if (!_db) return
+  if (_saveTimer) { clearTimeout(_saveTimer); _saveTimer = null }
   try {
     const data = _db.export()
     fs.writeFileSync(DB_PATH, Buffer.from(data))
+    _savePending = false
   } catch (err) {
-    console.error('[DB] Save error:', err.message)
+    console.error('[DB] Sync save error:', err.message)
   }
 }
+
+// Persist in-flight changes on process exit so debounced writes aren't lost.
+let _shutdownHooked = false
+function installShutdownHook() {
+  if (_shutdownHooked) return
+  _shutdownHooked = true
+  const onExit = () => { try { flushDBSync() } catch {} }
+  process.once('beforeExit', onExit)
+  process.once('SIGINT',  () => { onExit(); process.exit(0) })
+  process.once('SIGTERM', () => { onExit(); process.exit(0) })
+}
+installShutdownHook()
 
 export async function writeReadings(rows) {
   const db = await getDB()
