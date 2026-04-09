@@ -212,7 +212,18 @@ export function runHabOracle(inputs) {
     weightedRisk += factors[factor] * weight
   }
 
-  const posteriorRisk = (weightedRisk * 0.75) + (seasonalPrior * 0.25)
+  // ── Seasonal prior: decoupled from current-conditions risk ─────────────────
+  // Previously the prior got 25% of the posterior weight, which pushed even
+  // benign conditions into "moderate" during July–September and fueled alert
+  // fatigue. We now keep current-conditions risk as the primary signal and
+  // only apply a small Bayesian lift (max +7pp) when the prior disagrees with
+  // current conditions by a wide margin. Both values are still returned so
+  // operators can see the seasonal context separately.
+  const currentConditionsRisk = weightedRisk
+  const priorDelta = seasonalPrior - currentConditionsRisk
+  const SEASONAL_LIFT_MAX = 0.07
+  const seasonalAdjustment = Math.max(-SEASONAL_LIFT_MAX, Math.min(SEASONAL_LIFT_MAX, priorDelta * 0.25))
+  const posteriorRisk = Math.max(0, Math.min(1, currentConditionsRisk + seasonalAdjustment))
 
   let chlorophyllBoost = 0
   if (chlorophyll_ug_l !== null && chlorophyll_ug_l !== undefined) {
@@ -265,7 +276,9 @@ export function runHabOracle(inputs) {
     action,
     factors,
     rankedFactors,
+    currentConditionsRisk: Math.round(currentConditionsRisk * 100),
     seasonalPrior: Math.round(seasonalPrior * 100),
+    seasonalAdjustment: Math.round(seasonalAdjustment * 100),
     outlook,
     timestamp: new Date().toISOString(),
     dataQuality: {

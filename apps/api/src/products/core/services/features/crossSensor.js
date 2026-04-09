@@ -53,6 +53,27 @@ export function computeLagTime(hfRadarSummary, upstreamKey, downstreamKey) {
   }
 }
 
+// ── Feature vector cache ──────────────────────────────────────────────────────
+// The cron jobs rebuild the full 152-key vector every 3 minutes. User-facing
+// routes (hit every 30s or so) previously re-iterated all raw sensor arrays on
+// each request. Instead we publish the last cron-built vector here and serve
+// it from memory when it's fresh.
+let _cachedVector = null
+let _cachedVectorTs = 0
+const DEFAULT_FEATURE_CACHE_TTL_MS = 60_000
+
+export function getCachedFeatureVector(data = {}, { maxAgeMs = DEFAULT_FEATURE_CACHE_TTL_MS } = {}) {
+  if (_cachedVector && Date.now() - _cachedVectorTs < maxAgeMs) {
+    return _cachedVector
+  }
+  return buildFeatureVector(data)
+}
+
+export function getLastFeatureVector() {
+  if (!_cachedVector) return null
+  return { vector: _cachedVector, ts: _cachedVectorTs, ageMs: Date.now() - _cachedVectorTs }
+}
+
 export function buildFeatureVector(data = {}) {
   const {
     waterQuality, hfRadar, nerrs, aqi,
@@ -461,37 +482,75 @@ function extractExtSourceFeatures(extSources, safeN) {
     f.nws_precip_chance_24h = maxPrecip
   }
 
+  _cachedVector = f
+  _cachedVectorTs = Date.now()
   return f
 }
 
+// Minimum confidence required for a heuristic label to be used as training
+// data. Uncertain labels (below this floor) are emitted but suppressed by the
+// trainer so the model doesn't learn from weakly-supported examples.
+export const LABEL_CONFIDENCE_THRESHOLD = 0.6
+
 export function autoLabel(features) {
   const labels = { hab: null, hypoxia: null }
+  const confidence = { hab: 0, hypoxia: 0 }
+  const evidence = { hab: [], hypoxia: [] }
 
-  const do2Candidates = [
-    features.wbDo2,
-    features.min_do2,
-    features.avg_do2,
-    features.do2_saturation_pct != null ? features.do2_saturation_pct * 0.14 : null,
-  ].filter(v => v != null)
+  // ── Hypoxia label ─────────────────────────────────────────────────────────
+  const do2Sources = {
+    wbDo2:             features.wbDo2,
+    min_do2:           features.min_do2,
+    avg_do2:           features.avg_do2,
+    do2_sat_derived:   features.do2_saturation_pct != null ? features.do2_saturation_pct * 0.14 : null,
+  }
+  const do2Candidates = Object.entries(do2Sources)
+    .filter(([, v]) => v != null)
+    .map(([k, v]) => ({ source: k, value: v }))
 
   if (do2Candidates.length > 0) {
-    const minDo2 = Math.min(...do2Candidates)
+    const minEntry = do2Candidates.reduce((a, b) => (b.value < a.value ? b : a))
+    const minDo2 = minEntry.value
+    // Agreement: how many distinct sources land on the same side of the threshold?
+    const agreement = do2Candidates.length
+    const baseConf  = Math.min(1, 0.55 + 0.15 * (agreement - 1))
+
     if (minDo2 < THRESHOLDS.DO2_CRITICAL) {
       labels.hypoxia = 1
+      confidence.hypoxia = Math.min(1, baseConf + 0.2) // extreme DO2 → very confident
+      evidence.hypoxia.push(`min_do2=${minDo2.toFixed(2)} < critical (${THRESHOLDS.DO2_CRITICAL}) via ${minEntry.source}`)
     } else if (minDo2 <= THRESHOLDS.DO2_LOW) {
       labels.hypoxia = 1
-    } else {
+      confidence.hypoxia = baseConf
+      evidence.hypoxia.push(`min_do2=${minDo2.toFixed(2)} ≤ low (${THRESHOLDS.DO2_LOW}) via ${minEntry.source}`)
+    } else if (minDo2 >= THRESHOLDS.DO2_WARN + 1) {
       labels.hypoxia = 0
+      confidence.hypoxia = baseConf
+      evidence.hypoxia.push(`min_do2=${minDo2.toFixed(2)} well above warn (${THRESHOLDS.DO2_WARN})`)
+    } else {
+      // Values hovering in the 5–7 mg/L grey zone are genuinely ambiguous.
+      labels.hypoxia = 0
+      confidence.hypoxia = 0.4
+      evidence.hypoxia.push(`min_do2=${minDo2.toFixed(2)} in grey zone`)
     }
   } else {
+    // Fallback: infer from temperature proxies only — weak evidence.
     const waterTemp = features.buoy_water_temp_c ?? features.waterTemp_dauphinIs ?? features.goes_sst_mean ?? features.gcoos_water_temp_offshore ?? features.erddap_sst_mean
     const oceanStress = features.goes_sst_gradient != null && features.goes_sst_gradient >= 3.5
     if (waterTemp != null) {
-      if (waterTemp > 32 || (waterTemp > 28 && oceanStress)) labels.hypoxia = 1
-      else if (waterTemp < 15) labels.hypoxia = 0
+      if (waterTemp > 32 || (waterTemp > 28 && oceanStress)) {
+        labels.hypoxia = 1
+        confidence.hypoxia = 0.4
+        evidence.hypoxia.push(`proxy: waterTemp=${waterTemp.toFixed(1)}°C${oceanStress ? ' + stratified' : ''}`)
+      } else if (waterTemp < 15) {
+        labels.hypoxia = 0
+        confidence.hypoxia = 0.5
+        evidence.hypoxia.push(`proxy: waterTemp=${waterTemp.toFixed(1)}°C too cold for hypoxia`)
+      }
     }
   }
 
+  // ── HAB label ─────────────────────────────────────────────────────────────
   const temp = features.avg_temp ?? features.buoy_water_temp_c ?? features.goes_sst_mean ?? features.gcoos_water_temp_offshore ?? features.erddap_sst_mean
   const sal = features.wbSal ?? features.salinity_dauphinIs
 
@@ -502,17 +561,48 @@ export function autoLabel(features) {
     const calmWind   = wind < 5 ? 1 : 0
     const chlVal     = features.wbChlFl ?? features.erddap_chl_mean
     const highChl    = chlVal != null && chlVal > 10 ? 1 : 0
-    const summerFlag = features.is_summer
+    const summerFlag = features.is_summer ? 1 : 0
     const habNearby  = (features.hab_bulletin_events_nearby ?? 0) > 0 ? 1 : 0
 
     const score = warmWater + highSal + calmWind + highChl + summerFlag + habNearby
-    if (score >= 3)      labels.hab = 1
-    else if (score <= 1) labels.hab = 0
+    // Count how many factors had actual (non-default) signal behind them.
+    const observedFactors = [
+      temp != null, sal != null, wind != null,
+      chlVal != null, features.is_summer != null, features.hab_bulletin_events_nearby != null,
+    ].filter(Boolean).length
+    const coverage = observedFactors / 6
+
+    if (score >= 4) {
+      labels.hab = 1
+      confidence.hab = Math.min(1, 0.55 + 0.10 * (score - 4) + 0.2 * coverage)
+      evidence.hab.push(`score=${score}/6, coverage=${Math.round(coverage*100)}%`)
+    } else if (score >= 3) {
+      labels.hab = 1
+      confidence.hab = 0.5 + 0.2 * coverage
+      evidence.hab.push(`marginal score=${score}/6`)
+    } else if (score <= 1) {
+      labels.hab = 0
+      confidence.hab = Math.min(1, 0.55 + 0.2 * coverage)
+      evidence.hab.push(`low-risk score=${score}/6`)
+    } else {
+      // Ambiguous middle — emit but flag low-confidence.
+      labels.hab = 0
+      confidence.hab = 0.35
+      evidence.hab.push(`ambiguous score=${score}/6`)
+    }
   } else if (temp != null && !features.is_summer && temp < THRESHOLDS.TEMP_WARM) {
     labels.hab = 0
+    confidence.hab = 0.5
+    evidence.hab.push(`off-season cool water (temp=${temp.toFixed(1)}°C)`)
   }
 
-  return labels
+  return {
+    ...labels,
+    confidence,
+    evidence,
+    // Mirror legacy fields so downstream consumers keep working.
+    labels: { hab: labels.hab, hypoxia: labels.hypoxia },
+  }
 }
 
 export async function persistTick(data = {}) {
@@ -634,10 +724,18 @@ export async function persistTick(data = {}) {
     data.recentVectors = recentVecs
 
     const features = buildFeatureVector(data)
-    const labels   = autoLabel(features)
+    const labelResult = autoLabel(features)
+    // Only persist labels we're confident about; uncertain rows stay
+    // unlabeled and can be filled in later by a human reviewer.
+    const habConf     = labelResult.confidence?.hab ?? 0
+    const hypoxiaConf = labelResult.confidence?.hypoxia ?? 0
+    const gatedLabels = {
+      hab:     habConf     >= LABEL_CONFIDENCE_THRESHOLD ? labelResult.hab     : null,
+      hypoxia: hypoxiaConf >= LABEL_CONFIDENCE_THRESHOLD ? labelResult.hypoxia : null,
+    }
     const nonNullKeys = Object.values(features).filter(v => v != null).length
     const gapFilled = Object.keys(features).length - nonNullKeys
-    await writeFeatureVector(ts, features, labels, {
+    await writeFeatureVector(ts, features, gatedLabels, {
       sourceCount: rows.length,
       gapFilledFields: gapFilled,
       adphConfirmed: null,
@@ -657,8 +755,10 @@ export async function persistTick(data = {}) {
     return {
       ok:      true,
       readings: rows.length,
-      labeled: labels.hab != null || labels.hypoxia != null,
-      labels,
+      labeled: gatedLabels.hab != null || gatedLabels.hypoxia != null,
+      labels: gatedLabels,
+      labelConfidence: labelResult.confidence,
+      labelEvidence: labelResult.evidence,
       goesFeatures: features.goes_sst_gradient != null,
     }
   } catch (err) {
